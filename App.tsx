@@ -1,468 +1,340 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { AppTab, Trip, DayItinerary, Expense, User } from './types';
+import { PRESET_AVATARS } from './constants';
+import ItineraryView from './components/ItineraryView';
+import ExpenseView from './components/ExpenseView';
+import MapView from './components/MapView';
+import HomeView from './components/HomeView';
+import { db, getDeviceId, ensureUserExists } from './services/firebase';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, setDoc } from 'firebase/firestore';
 
-// --- 1. Type Definitions ---
-interface TripItem {
-  id: string;
-  type: 'spot' | 'food' | 'transport' | 'hotel' | 'note';
-  time?: string;
-  title: string;
-  location?: string;
-  cost?: number;
-  note?: string;
-}
-
-interface DayPlan {
-  id: string;
-  date: string;
-  dayLabel: string;
-  items: TripItem[];
-}
-
-interface Expense {
-  id: string;
-  title: string;
-  amount: number;
-  category: string;
-  payer: string;
-}
-
-interface Trip {
-  id: string;
-  name: string;
-  destination: string;
-  startDate: string;
-  endDate: string;
-  coverImage: string;
-  days: DayPlan[];
-  expenses: Expense[];
-}
-
-// --- 2. Mock Data (Initial State) ---
-const INITIAL_TRIPS: Trip[] = [
-  {
-    id: 't-1',
-    name: '東京探索',
-    destination: 'Tokyo, Japan',
-    startDate: '2025-04-10',
-    endDate: '2025-04-15',
-    coverImage: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&q=80&w=1000',
-    days: Array(6).fill(null).map((_, i) => ({ id: `d-${i}`, date: `2025-04-${10+i}`, dayLabel: `Day ${i+1}`, items: [] })),
-    expenses: []
-  },
-  {
-    id: 't-2',
-    name: '冰島極光行',
-    destination: 'Reykjavík, Iceland',
-    startDate: '2025-11-20',
-    endDate: '2025-11-28',
-    coverImage: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&q=80&w=1000',
-    days: Array(9).fill(null).map((_, i) => ({ id: `d-${i}`, date: `2025-11-${20+i}`, dayLabel: `Day ${i+1}`, items: [] })),
-    expenses: []
-  }
-];
-
-// --- 3. Helper Components ---
-
-// Status Badge with Glow Effect
-const StatusBadge = ({ start, end }: { start: string, end: string }) => {
-    const status = useMemo(() => {
-        const now = new Date();
-        const startDate = new Date(start);
-        const endDate = new Date(end);
-        now.setHours(0,0,0,0);
-        
-        if (now > endDate) return { label: 'COMPLETED', color: 'text-gray-400 border-gray-600 bg-gray-800/50', glow: '' };
-        if (now >= startDate && now <= endDate) return { label: 'ON GOING', color: 'text-cyan-300 border-cyan-500/50 bg-cyan-900/30', glow: 'shadow-[0_0_10px_rgba(34,211,238,0.3)]' };
-        
-        const diffTime = Math.abs(startDate.getTime() - now.getTime());
-        const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return { label: `${daysLeft} DAYS LEFT`, color: 'text-fuchsia-300 border-fuchsia-500/50 bg-fuchsia-900/30', glow: 'shadow-[0_0_10px_rgba(232,121,249,0.3)]' };
-    }, [start, end]);
-
-    return (
-        <div className={`px-3 py-1 rounded-full border backdrop-blur-sm text-[10px] font-black tracking-widest ${status.color} ${status.glow}`}>
-            {status.label}
-        </div>
-    );
+// Helper to remove undefined values before sending to Firestore
+// Firestore does not support 'undefined' as a value
+const sanitizeForFirestore = (data: any) => {
+  return JSON.parse(JSON.stringify(data));
 };
 
-// --- 4. Main HomeView Component ---
-
-interface HomeViewProps {
-  trips: Trip[];
-  onSelectTrip: (tripId: string) => void;
-  onAddTrip: (trip: Trip) => void;
-  onDeleteTrip: (tripId: string) => void;
-}
-
-const HomeView: React.FC<HomeViewProps> = ({ trips = [], onSelectTrip, onAddTrip, onDeleteTrip }) => {
-  const [showSheet, setShowSheet] = useState(false);
-  const [isSheetAnimating, setIsSheetAnimating] = useState(false);
+const App: React.FC = () => {
+  // Global App State
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [activeTripId, setActiveTripId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   
-  // Form State
-  const [destination, setDestination] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [coverImage, setCoverImage] = useState('');
+  // Theme State
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    try {
+        const saved = localStorage.getItem('wanderlist_theme');
+        return saved === 'dark';
+    } catch { return false; }
+  });
 
-  // UI State
-  const [activeTab, setActiveTab] = useState('home');
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-  const [deleteTripId, setDeleteTripId] = useState<string | null>(null);
+  // Tab State for Detail View
+  const [activeTab, setActiveTab] = useState<AppTab>(AppTab.ITINERARY);
 
-  // Stats
-  const stats = useMemo(() => {
-    const now = new Date();
-    const safeTrips = trips || [];
-    const upcoming = safeTrips.filter(t => new Date(t.startDate) > now).length;
-    const completed = safeTrips.filter(t => new Date(t.endDate) < now).length;
-    return { upcoming, completed, total: safeTrips.length };
-  }, [trips]);
+  // Modals
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<{name: string, avatar: string}>({ name: '', avatar: '' });
+
+  // Initialize Theme
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('wanderlist_theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('wanderlist_theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
+
+  // Initialize User & Firebase Listeners
+  useEffect(() => {
+    const init = async () => {
+        const deviceId = getDeviceId();
+        await ensureUserExists(deviceId);
+    };
+    init();
+
+    if (db) {
+        // Listen to Users
+        const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+            const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setUsers(usersData);
+            const myId = getDeviceId();
+            const me = usersData.find(u => u.id === myId);
+            if (me) setCurrentUser(me);
+        });
+
+        // Listen to Trips
+        const unsubTrips = onSnapshot(collection(db, 'trips'), (snapshot) => {
+             const tripsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Trip));
+             // Sort by startDate desc
+             tripsData.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+             setTrips(tripsData);
+        });
+
+        return () => {
+            unsubUsers();
+            unsubTrips();
+        };
+    } else {
+        // Fallback for offline mode / no DB
+        const myId = getDeviceId();
+        const mockUser: User = { id: myId, name: '訪客', avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Felix' };
+        setUsers([mockUser]);
+        setCurrentUser(mockUser);
+    }
+  }, []);
 
   // Handlers
-  const handleOpenSheet = () => {
-      setShowSheet(true);
-      setTimeout(() => setIsSheetAnimating(true), 10);
+  const handleAddTrip = async (newTrip: Trip) => {
+     if (!db) {
+         setTrips([newTrip, ...trips]);
+         return;
+     }
+     // Use setDoc to preserve the ID generated by HomeView
+     // Sanitize to prevent "Unsupported field value: undefined" errors
+     const safeTrip = sanitizeForFirestore(newTrip);
+     await setDoc(doc(db, 'trips', newTrip.id), safeTrip);
   };
 
-  const handleCloseSheet = () => {
-      setIsSheetAnimating(false);
-      setTimeout(() => setShowSheet(false), 300);
+  const handleDeleteTrip = async (tripId: string) => {
+      if (!db) {
+          setTrips(trips.filter(t => t.id !== tripId));
+          if (activeTripId === tripId) setActiveTripId(null);
+          return;
+      }
+      await deleteDoc(doc(db, 'trips', tripId));
+      if (activeTripId === tripId) setActiveTripId(null);
   };
 
-  const handleCreate = () => {
-    if (!destination || !startDate || !endDate) return;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    // Logic to prevent infinite loop if dates are wrong
-    if (end < start) {
-        alert("回程日期不能早於出發日期");
-        return;
-    }
+  const handleUpdateUser = async () => {
+      // Use existing ID or fallback to device ID
+      const myId = currentUser?.id || getDeviceId();
+      const newName = editingUser.name || 'User';
+      const newAvatar = editingUser.avatar || PRESET_AVATARS[0];
+      
+      const updatedUser: User = { 
+          id: myId, 
+          name: newName, 
+          avatar: newAvatar 
+      };
+      
+      // Update local state immediately (Optimistic UI)
+      setCurrentUser(updatedUser);
+      setUsers(prev => {
+          const exists = prev.find(u => u.id === myId);
+          if (exists) return prev.map(u => u.id === myId ? updatedUser : u);
+          return [...prev, updatedUser];
+      });
+      
+      // Close Modal immediately
+      setShowProfileModal(false);
 
-    const daysArr: DayPlan[] = [];
-    let current = new Date(start);
-    let dayCount = 1;
-
-    while (current <= end) {
-        daysArr.push({ 
-            id: `d-${Date.now()}-${dayCount}`, 
-            date: current.toISOString().split('T')[0], 
-            dayLabel: `Day ${dayCount}`, 
-            items: [] 
-        });
-        current.setDate(current.getDate() + 1);
-        dayCount++;
-    }
-    
-    const finalImage = coverImage.trim() || `https://source.unsplash.com/800x600/?${encodeURIComponent(destination)},neon,city,night`;
-
-    const newTrip: Trip = {
-        id: `t-${Date.now()}`,
-        name: `${destination} 之旅`,
-        destination, 
-        startDate, 
-        endDate,
-        coverImage: finalImage,
-        days: daysArr, 
-        expenses: []
-    };
-    
-    onAddTrip(newTrip);
-    handleCloseSheet();
-    setDestination(''); setStartDate(''); setEndDate(''); setCoverImage('');
-  };
-
-  const confirmDelete = () => {
-      if (deleteTripId) {
-          onDeleteTrip(deleteTripId);
-          setDeleteTripId(null);
-          setActiveMenuId(null);
+      if (db) {
+        try {
+            await setDoc(doc(db, 'users', myId), {
+                name: newName,
+                avatar: newAvatar
+            }, { merge: true });
+        } catch(e) {
+            console.error("Update user failed", e);
+            alert("更新失敗: 圖片可能過大或網絡問題");
+        }
       }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-[#0B0F19] text-white font-sans relative overflow-hidden selection:bg-cyan-500 selection:text-black">
-       
-       {/* Ambient Background Glows */}
-       <div className="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[100px] pointer-events-none"></div>
-       <div className="fixed bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-cyan-600/10 rounded-full blur-[80px] pointer-events-none"></div>
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+         alert("圖片過大，請選擇小於 5MB 的圖片");
+         return;
+      }
 
-       {/* Header */}
-       <div className="px-6 pt-14 pb-6 sticky top-0 z-20 backdrop-blur-xl bg-[#0B0F19]/80 border-b border-white/5">
-            <div className="flex justify-between items-end mb-6">
-                <div>
-                    <h2 className="text-cyan-400 text-xs font-black tracking-[0.2em] mb-2 uppercase">My Voyages</h2>
-                    <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
-                        探索未知
-                    </h1>
-                </div>
-            </div>
-
-            {/* Dark Stats Cards */}
-            <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-md relative overflow-hidden group">
-                     <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                     <div className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Upcoming</div>
-                     <div className="text-2xl font-mono font-bold text-white flex items-baseline gap-1">
-                        {stats.upcoming} <span className="text-xs text-gray-500 font-sans">Trips</span>
-                     </div>
-                </div>
-                <div className="bg-white/5 border border-white/10 p-4 rounded-2xl backdrop-blur-md">
-                     <div className="text-gray-400 text-[10px] font-bold uppercase tracking-wider mb-1">Total Memories</div>
-                     <div className="text-2xl font-mono font-bold text-white flex items-baseline gap-1">
-                        {stats.total} <span className="text-xs text-gray-500 font-sans">Trips</span>
-                     </div>
-                </div>
-            </div>
-       </div>
-
-       {/* Scrollable Content */}
-       <div className="flex-1 overflow-y-auto px-6 pt-4 pb-32 space-y-8" onClick={() => setActiveMenuId(null)}>
-            {trips.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[50vh] opacity-50">
-                    <div className="w-32 h-32 rounded-full bg-gradient-to-t from-gray-800 to-transparent flex items-center justify-center mb-4 border border-white/5">
-                         <i className="fa-solid fa-earth-americas text-4xl text-gray-600"></i>
-                    </div>
-                    <p className="text-gray-400 font-light tracking-wide text-sm">The world is waiting for you.</p>
-                </div>
-            ) : (
-                trips.map((trip) => {
-                    const isMenuOpen = activeMenuId === trip.id;
-                    
-                    return (
-                        <div 
-                            key={trip.id} 
-                            onClick={() => onSelectTrip(trip.id)}
-                            className="group relative w-full aspect-[16/10] rounded-[2rem] overflow-hidden bg-gray-900 border border-white/10 shadow-2xl shadow-black/50 active:scale-[0.98] transition-all duration-300"
-                        >
-                            {/* Image with zoom effect */}
-                            <img 
-                                src={trip.coverImage} 
-                                alt={trip.destination} 
-                                className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 group-hover:scale-105 transition-all duration-1000 ease-out"
-                                onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1516738901171-8eb4fc13bd20?auto=format&fit=crop&q=80&w=800'; }}
-                            />
-                            
-                            {/* Cinematic Overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-[#0B0F19] via-[#0B0F19]/40 to-transparent"></div>
-                            
-                            {/* Content */}
-                            <div className="absolute inset-0 p-6 flex flex-col justify-between">
-                                <div className="flex justify-between items-start">
-                                    <StatusBadge start={trip.startDate} end={trip.endDate} />
-                                    
-                                    {/* Action Button */}
-                                    <button 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setActiveMenuId(isMenuOpen ? null : trip.id);
-                                        }}
-                                        className="w-8 h-8 rounded-full bg-black/30 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/70 hover:bg-white/20 transition-all z-20"
-                                    >
-                                        <i className="fa-solid fa-ellipsis text-xs"></i>
-                                    </button>
-
-                                    {/* Menu Dropdown */}
-                                    {isMenuOpen && (
-                                        <div className="absolute top-10 right-0 w-36 bg-[#1a202c] border border-white/10 rounded-xl shadow-xl overflow-hidden py-1 z-30 animate-fade-in origin-top-right">
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); onSelectTrip(trip.id); }}
-                                                className="w-full text-left px-4 py-3 text-xs font-bold text-gray-300 hover:bg-white/5 hover:text-white flex items-center gap-3"
-                                            >
-                                                <i className="fa-regular fa-eye text-cyan-400"></i> View Details
-                                            </button>
-                                            <div className="h-px bg-white/5 mx-2"></div>
-                                            <button 
-                                                onClick={(e) => { 
-                                                    e.stopPropagation(); 
-                                                    setDeleteTripId(trip.id); 
-                                                    setActiveMenuId(null);
-                                                }} 
-                                                className="w-full text-left px-4 py-3 text-xs font-bold text-rose-500 hover:bg-rose-500/10 flex items-center gap-3"
-                                            >
-                                                <i className="fa-regular fa-trash-can"></i> Delete
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <div className="flex items-center gap-2 mb-2 opacity-0 transform translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-500 delay-100">
-                                        <div className="w-6 h-[1px] bg-cyan-500"></div>
-                                        <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">{trip.startDate.replace(/-/g, '.')}</span>
-                                    </div>
-                                    <h3 className="text-4xl font-black text-white tracking-tight leading-none mb-1 drop-shadow-lg font-display">
-                                        {trip.destination}
-                                    </h3>
-                                    <p className="text-xs text-gray-400 font-medium tracking-wide flex items-center gap-1">
-                                       <i className="fa-solid fa-location-dot text-[10px]"></i> {trip.days?.length || 0} Days Trip
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })
-            )}
-       </div>
-
-       {/* Floating Navigation Bar (Island Style) */}
-       <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 w-[90%] max-w-[400px] h-16 bg-[#161b2c]/80 backdrop-blur-2xl border border-white/10 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.5)] z-40 flex items-center justify-between px-2 pl-6 pr-6">
-            <button 
-                onClick={() => setActiveTab('home')}
-                className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'home' ? 'text-cyan-400 scale-110' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-                <i className="fa-solid fa-compass text-lg"></i>
-            </button>
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        // Compress Image logic
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            // Max dimensions 300px is enough for avatars
+            const MAX_SIZE = 300; 
+            let width = img.width;
+            let height = img.height;
             
-            <button className="flex flex-col items-center gap-1 text-gray-600 pointer-events-none">
-                <i className="fa-solid fa-map text-lg"></i>
-            </button>
+            if (width > height) {
+                if (width > MAX_SIZE) {
+                    height *= MAX_SIZE / width;
+                    width = MAX_SIZE;
+                }
+            } else {
+                if (height > MAX_SIZE) {
+                    width *= MAX_SIZE / height;
+                    height = MAX_SIZE;
+                }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(img, 0, 0, width, height);
+                // Compress to JPEG 0.7 quality to reduce size for Firestore (max 1MB doc limit)
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                setEditingUser(prev => ({ ...prev, avatar: compressedBase64 }));
+            }
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
-            {/* Glowing FAB in Nav */}
-            <div className="relative -top-6">
-                <button 
-                    onClick={handleOpenSheet} 
-                    className="w-14 h-14 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full flex items-center justify-center text-white shadow-[0_0_20px_rgba(6,182,212,0.6)] hover:scale-110 active:scale-95 transition-all border-[4px] border-[#0B0F19]"
-                >
-                    <i className="fa-solid fa-plus text-xl"></i>
-                </button>
-            </div>
+  const activeTrip = trips.find(t => t.id === activeTripId);
 
-            <button className="flex flex-col items-center gap-1 text-gray-600 pointer-events-none">
-                <i className="fa-solid fa-heart text-lg"></i>
-            </button>
+  // Wrappers to update specific fields of the active trip
+  const setDaysWrapper = (action: React.SetStateAction<DayItinerary[]>) => {
+      if (!activeTrip) return;
+      
+      const newDays = typeof action === 'function' ? action(activeTrip.days) : action;
+      
+      if (!db) {
+          setTrips(trips.map(t => t.id === activeTrip.id ? { ...t, days: newDays } : t));
+          return;
+      }
+      updateDoc(doc(db, 'trips', activeTrip.id), { days: sanitizeForFirestore(newDays) });
+  };
 
-            <button 
-                onClick={() => setActiveTab('profile')}
-                className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'profile' ? 'text-cyan-400 scale-110' : 'text-gray-500 hover:text-gray-300'}`}
-            >
-                <i className="fa-solid fa-user-astronaut text-lg"></i>
-            </button>
-       </div>
+  const setExpensesWrapper = (action: React.SetStateAction<Expense[]>) => {
+      if (!activeTrip) return;
+      
+      const newExpenses = typeof action === 'function' ? action(activeTrip.expenses) : action;
+      
+      if (!db) {
+          setTrips(trips.map(t => t.id === activeTrip.id ? { ...t, expenses: newExpenses } : t));
+          return;
+      }
+      updateDoc(doc(db, 'trips', activeTrip.id), { expenses: sanitizeForFirestore(newExpenses) });
+  };
 
-       {/* Create Trip Sheet (Bottom Sheet) */}
-       {showSheet && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onClick={handleCloseSheet}></div>
-          <div className={`bg-[#161b2c] w-full max-w-[500px] rounded-t-[2.5rem] p-8 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] border-t border-white/10 transform transition-transform duration-300 ease-out z-50 pb-12 ${isSheetAnimating ? 'translate-y-0' : 'translate-y-full'}`}>
-             
-             <div className="w-12 h-1 bg-gray-700 rounded-full mx-auto mb-8"></div>
+  // View Routing
+  if (!activeTripId) {
+      return (
+          <HomeView 
+            trips={trips} 
+            onSelectTrip={setActiveTripId} 
+            onAddTrip={handleAddTrip} 
+            onDeleteTrip={handleDeleteTrip}
+            isDarkMode={isDarkMode}
+            toggleTheme={toggleTheme}
+          />
+      );
+  }
 
-             <h3 className="text-2xl font-black text-white mb-6 flex items-center gap-2">
-                <span className="text-cyan-400">New</span> Adventure
-             </h3>
+  if (!activeTrip) return null;
 
-             <div className="space-y-5">
-               <div className="group">
-                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-cyan-400 transition-colors">Destination</label>
-                 <div className="bg-black/30 border border-white/10 rounded-2xl p-4 flex items-center gap-3 focus-within:border-cyan-500/50 focus-within:bg-black/50 transition-all">
-                    <i className="fa-solid fa-location-dot text-gray-500 group-focus-within:text-cyan-400"></i>
-                    <input type="text" placeholder="Where to?" value={destination} onChange={e => setDestination(e.target.value)} className="w-full bg-transparent outline-none font-bold text-lg text-white placeholder-gray-600" autoFocus />
-                 </div>
-               </div>
-               
-               <div className="group">
-                 <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-cyan-400 transition-colors">Cover Image (URL)</label>
-                 <div className="bg-black/30 border border-white/10 rounded-2xl p-4 flex items-center gap-3 focus-within:border-cyan-500/50 transition-all">
-                    <i className="fa-regular fa-image text-gray-500 group-focus-within:text-cyan-400"></i>
-                    <input type="text" placeholder="https://..." value={coverImage} onChange={e => setCoverImage(e.target.value)} className="w-full bg-transparent outline-none text-sm font-medium text-gray-300 placeholder-gray-600 font-mono" />
-                 </div>
-               </div>
+  return (
+    <div className="h-screen w-full flex flex-col bg-[#F2F2F7] dark:bg-[#0B0F19] overflow-hidden text-slate-900 dark:text-slate-100 font-sans transition-colors duration-300">
+      
+      {/* Header - Reduced Height */}
+      <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md pt-6 pb-2 px-4 shadow-sm z-30 flex justify-between items-center shrink-0 border-b border-gray-200 dark:border-white/5 transition-colors duration-300">
+        <button onClick={() => setActiveTripId(null)} className="w-10 h-10 rounded-full flex items-center justify-center text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors">
+            <i className="fa-solid fa-chevron-left"></i>
+        </button>
+        
+        <h1 className="text-lg font-black text-center flex-1 truncate mx-2 dark:text-white">{activeTrip.destination}</h1>
+        
+        <div className="flex gap-2">
+             <button 
+                onClick={toggleTheme}
+                className="w-10 h-10 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-400 dark:text-yellow-400 transition-colors"
+             >
+                <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'}`}></i>
+             </button>
+             <button onClick={() => { 
+                 setEditingUser({ name: currentUser?.name || '', avatar: currentUser?.avatar || '' });
+                 setShowProfileModal(true); 
+             }} className="relative">
+                <img src={currentUser?.avatar} alt="Me" className="w-9 h-9 rounded-full border-2 border-white dark:border-slate-700 shadow-sm bg-gray-200 object-cover" />
+                <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-slate-900 rounded-full"></div>
+             </button>
+        </div>
+      </div>
 
-               <div className="flex gap-4">
-                    <div className="flex-1 group">
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-cyan-400 transition-colors">Start</label>
-                        <div className="bg-black/30 border border-white/10 rounded-2xl p-4 focus-within:border-cyan-500/50 transition-all">
-                             <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-white font-mono invert-calendar-icon" style={{colorScheme: 'dark'}} />
-                        </div>
-                    </div>
-                    <div className="flex-1 group">
-                        <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-cyan-400 transition-colors">End</label>
-                        <div className="bg-black/30 border border-white/10 rounded-2xl p-4 focus-within:border-cyan-500/50 transition-all">
-                             <input type="date" min={startDate} value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-white font-mono" style={{colorScheme: 'dark'}} />
-                        </div>
-                    </div>
-               </div>
-               
-               <div className="pt-6">
-                   <button 
-                       onClick={handleCreate} 
-                       disabled={!destination || !startDate || !endDate} 
-                       className="w-full py-4 rounded-2xl font-black text-black bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_20px_rgba(6,182,212,0.4)]"
-                    >
-                       LAUNCH TRIP
-                   </button>
-               </div>
-             </div>
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden relative">
+         {activeTab === AppTab.ITINERARY && <ItineraryView days={activeTrip.days} setDays={setDaysWrapper} />}
+         {activeTab === AppTab.EXPENSES && <ExpenseView expenses={activeTrip.expenses} setExpenses={setExpensesWrapper} users={users} />}
+         {activeTab === AppTab.MAP && <MapView days={activeTrip.days} isDarkMode={isDarkMode} />}
+      </div>
+
+      {/* Bottom Navigation (Floating Pill Style) */}
+      <div className="absolute bottom-8 left-0 right-0 z-30 flex justify-center pointer-events-none">
+          <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-white/50 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-full p-1.5 flex gap-1 pointer-events-auto transition-all duration-300">
+             {[
+                 { id: AppTab.ITINERARY, icon: 'fa-calendar-days', label: '行程' },
+                 { id: AppTab.EXPENSES, icon: 'fa-wallet', label: '記帳' },
+                 { id: AppTab.MAP, icon: 'fa-map', label: '地圖' },
+             ].map(tab => (
+                 <button 
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`px-6 py-3 rounded-full flex items-center gap-2 transition-all duration-300 
+                    ${activeTab === tab.id 
+                        ? 'bg-[#007AFF] text-white shadow-md shadow-blue-200 dark:bg-[#1e3a8a] dark:text-blue-100 dark:shadow-blue-900/50' 
+                        : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'
+                    }`}
+                 >
+                     <i className={`fa-solid ${tab.icon} ${activeTab === tab.id ? 'text-sm' : 'text-lg'}`}></i>
+                     {activeTab === tab.id && <span className="text-xs font-bold">{tab.label}</span>}
+                 </button>
+             ))}
           </div>
-        </div>
-      )}
+      </div>
 
-      {/* Delete Modal */}
-      {deleteTripId && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-6 animate-fade-in">
-             <div className="bg-[#1a202c] border border-white/10 rounded-[2rem] p-8 shadow-2xl max-w-xs w-full text-center animate-scale-up relative overflow-hidden">
-                {/* Background glow for modal */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500 via-purple-500 to-rose-500"></div>
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+             <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-2xl max-w-sm w-full border border-white/50 dark:border-white/10 animate-scale-up">
+                 <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-black text-black dark:text-white">設定個人檔案</h3>
+                    <button onClick={() => setShowProfileModal(false)} className="w-8 h-8 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                 </div>
+                 
+                 <div className="flex flex-col items-center mb-6">
+                     <div className="relative group">
+                        <img src={editingUser.avatar || PRESET_AVATARS[0]} className="w-24 h-24 rounded-full bg-gray-100 dark:bg-slate-800 mb-4 shadow-lg object-cover border-4 border-white dark:border-slate-800" alt="Preview" />
+                        <label className="absolute bottom-4 right-0 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white cursor-pointer shadow-md hover:bg-blue-600 transition-colors">
+                            <i className="fa-solid fa-camera text-xs"></i>
+                            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                        </label>
+                     </div>
+                     
+                     <div className="flex gap-2 overflow-x-auto max-w-full pb-2 no-scrollbar w-full justify-center">
+                         {PRESET_AVATARS.slice(0, 5).map((url, i) => (
+                             <button key={i} onClick={() => setEditingUser({...editingUser, avatar: url})} className={`w-10 h-10 rounded-full shrink-0 border-2 transition-all ${editingUser.avatar === url ? 'border-blue-500 scale-110' : 'border-transparent opacity-50 hover:opacity-100'}`}>
+                                 <img src={url} className="w-full h-full rounded-full" alt="" />
+                             </button>
+                         ))}
+                     </div>
+                 </div>
 
-                <div className="w-16 h-16 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl border border-rose-500/20 shadow-[0_0_15px_rgba(244,63,94,0.2)]">
-                    <i className="fa-solid fa-triangle-exclamation"></i>
-                </div>
-                <h3 className="text-xl font-black text-white mb-3">Delete Trip?</h3>
-                <p className="text-sm text-gray-400 font-medium mb-8 leading-relaxed">This action cannot be undone. All memories and expenses will be lost in the void.</p>
-                <div className="flex flex-col gap-3">
-                   <button 
-                       onClick={confirmDelete} 
-                       className="w-full py-3 bg-rose-600 hover:bg-rose-500 rounded-xl font-bold text-white shadow-lg shadow-rose-900/50 transition-colors"
-                    >
-                       Confirm Deletion
-                   </button>
-                   <button 
-                       onClick={() => setDeleteTripId(null)} 
-                       className="w-full py-3 bg-transparent hover:bg-white/5 rounded-xl font-bold text-gray-400 transition-colors"
-                    >
-                       Cancel
-                   </button>
-                </div>
+                 <div className="space-y-4">
+                     <div>
+                         <label className="block text-xs font-bold text-gray-400 uppercase mb-2">顯示名稱</label>
+                         <input type="text" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all placeholder-gray-300" placeholder="您的名字" />
+                     </div>
+                     <button onClick={handleUpdateUser} className="w-full py-4 bg-black dark:bg-blue-600 rounded-2xl text-white font-bold shadow-lg hover:bg-gray-800 dark:hover:bg-blue-500 transition-all">儲存設定</button>
+                 </div>
              </div>
         </div>
       )}
+
     </div>
   );
-};
-
-// --- 5. Main App Component (Wrapper) ---
-const App = () => {
-    const [trips, setTrips] = useState<Trip[]>(INITIAL_TRIPS);
-    const [currentView, setCurrentView] = useState('home');
-    const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
-
-    const handleAddTrip = (newTrip: Trip) => {
-        setTrips(prev => [newTrip, ...prev]);
-    };
-
-    const handleDeleteTrip = (tripId: string) => {
-        setTrips(prev => prev.filter(t => t.id !== tripId));
-    };
-
-    const handleSelectTrip = (tripId: string) => {
-        console.log("Selected Trip:", tripId);
-        setSelectedTripId(tripId);
-        // For demo purposes, we stay on HomeView but log the selection
-        // In a real app, you would switch to a DetailView here
-        alert(`進入行程詳情: ${trips.find(t => t.id === tripId)?.name}`);
-    };
-
-    return (
-        <HomeView 
-            trips={trips}
-            onAddTrip={handleAddTrip}
-            onDeleteTrip={handleDeleteTrip}
-            onSelectTrip={handleSelectTrip}
-        />
-    );
 };
 
 export default App;

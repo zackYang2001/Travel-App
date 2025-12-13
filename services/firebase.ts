@@ -1,59 +1,50 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
 
-// ------------------------------------------------------------------
-// 使用環境變數載入 Firebase 設定 (最安全的方式)
-// 這些變數會從你的 .env.local 檔案中讀取
-// ------------------------------------------------------------------
+// TODO: Replace with your actual Firebase project configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: "AIzaSyBZjmlWMFi6tnqldHL0T6PHVMJSv32RO3w",
+  authDomain: "travel-app-a41a6.firebaseapp.com",
+  projectId: "travel-app-a41a6",
+  storageBucket: "travel-app-a41a6.firebasestorage.app",
+  messagingSenderId: "61125297760",
+  appId: "1:61125297760:web:1446bced80119165caa505"
 };
 
-// Initialize only if config is valid
+// Initialize Firebase
 let app;
 let db: any;
 
 try {
-    // 檢查是否有抓到環境變數 (apiKey 是否存在)
-    if (firebaseConfig.apiKey) {
-        app = initializeApp(firebaseConfig);
-        db = getFirestore(app);
-        console.log("Firebase initialized successfully with env vars");
-    } else {
-        console.warn("Firebase config is missing. Please check your .env.local file.");
-    }
-} catch (e) {
-    console.error("Firebase init error:", e);
+    app = initializeApp(firebaseConfig);
+    db = getFirestore(app);
+} catch (error) {
+    console.error("Firebase Initialization Error:", error);
 }
 
-export { db };
-
-// Helper to identify the current device/browser user
-export const getDeviceId = () => {
+// Helper to get a consistent Device ID for this browser
+const getDeviceId = () => {
     let id = localStorage.getItem('wanderlist_device_id');
     if (!id) {
-        id = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('wanderlist_device_id', id);
     }
     return id;
 };
 
-export const ensureUserExists = async (userId: string, defaultName: string = '訪客') => {
+// Ensure the current "Device User" exists in the users collection
+const ensureUserExists = async (deviceId: string) => {
     if (!db) return;
-    const userRef = doc(db, 'users', userId);
-    const snap = await getDoc(userRef);
-    if (!snap.exists()) {
+    const userRef = doc(db, 'users', deviceId);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
         await setDoc(userRef, {
-            id: userId,
-            name: defaultName,
-            avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=' + userId
+            id: deviceId,
+            name: '訪客',
+            avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Felix'
         });
     }
-    return snap.exists() ? snap.data() : { id: userId, name: defaultName };
 };
+
+export { db, getDeviceId, ensureUserExists };
