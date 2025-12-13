@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppTab, Trip, DayItinerary, Expense, User } from './types';
 import { PRESET_AVATARS } from './constants';
 import ItineraryView from './components/ItineraryView';
@@ -31,6 +31,10 @@ const App: React.FC = () => {
 
   // Tab State for Detail View
   const [activeTab, setActiveTab] = useState<AppTab>(AppTab.ITINERARY);
+
+  // Swipe Logic Refs
+  const touchStartX = useRef<number | null>(null);
+  const TABS = [AppTab.ITINERARY, AppTab.EXPENSES, AppTab.MAP];
 
   // Modals
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -362,6 +366,37 @@ const App: React.FC = () => {
       setShowTripSettings(false);
   };
 
+  // Main Swipe Logic
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.targetTouches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX.current - touchEndX;
+    
+    // Reset
+    touchStartX.current = null;
+
+    // Threshold for swipe detection (px)
+    if (Math.abs(diff) < 60) return;
+
+    const currentIndex = TABS.indexOf(activeTab);
+    
+    if (diff > 0) {
+        // Swipe Left -> Next Tab
+        if (currentIndex < TABS.length - 1) {
+            setActiveTab(TABS[currentIndex + 1]);
+        }
+    } else {
+        // Swipe Right -> Prev Tab
+        if (currentIndex > 0) {
+            setActiveTab(TABS[currentIndex - 1]);
+        }
+    }
+  };
+
   // View Routing
   if (!activeTripId) {
       return (
@@ -414,8 +449,12 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden relative">
+      {/* Main Content with Swipe Handlers */}
+      <div 
+        className="flex-1 overflow-hidden relative"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
          {activeTab === AppTab.ITINERARY && <ItineraryView days={activeTrip.days} setDays={setDaysWrapper} destination={activeTrip.destination} />}
          {/* Pass only the relevant tripUsers to ExpenseView */}
          {activeTab === AppTab.EXPENSES && <ExpenseView expenses={activeTrip.expenses} setExpenses={setExpensesWrapper} users={tripUsers} />}

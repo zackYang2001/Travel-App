@@ -107,10 +107,12 @@ const ExpenseView: React.FC<ExpenseViewProps> = ({ expenses, setExpenses, users 
 
   // Touch Handlers for Swipe
   const onTouchStart = (e: React.TouchEvent, id: string) => {
+      e.stopPropagation(); // Prevent global swipe for tab switching
       touchStartRef.current = e.targetTouches[0].clientX;
   };
 
   const onTouchEnd = (e: React.TouchEvent, id: string) => {
+      e.stopPropagation(); // Prevent global swipe
       const endX = e.changedTouches[0].clientX;
       const diff = touchStartRef.current - endX;
       

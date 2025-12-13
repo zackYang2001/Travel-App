@@ -505,6 +505,8 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
         <div 
           ref={dayListRef}
           onScroll={handleDayListScroll}
+          onTouchStart={(e) => e.stopPropagation()} 
+          onTouchEnd={(e) => e.stopPropagation()}
           className={`flex overflow-x-auto snap-x snap-mandatory items-center no-scrollbar py-2`} 
           style={{ 
               height: isScrolled ? '72px' : '84px',
