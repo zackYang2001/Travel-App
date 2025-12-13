@@ -1,32 +1,32 @@
-
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, addDoc, doc, updateDoc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 
 // ------------------------------------------------------------------
-// IMPORTANT: REPLACE THE OBJECT BELOW WITH YOUR OWN FIREBASE CONFIG
-// 1. Go to console.firebase.google.com
-// 2. Create a project -> Add Web App
-// 3. Copy the config object
+// 使用環境變數載入 Firebase 設定 (最安全的方式)
+// 這些變數會從你的 .env.local 檔案中讀取
 // ------------------------------------------------------------------
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "SENDER_ID",
-  appId: "APP_ID"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize only if config is valid (simple check)
+// Initialize only if config is valid
 let app;
 let db: any;
 
 try {
-    if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+    // 檢查是否有抓到環境變數 (apiKey 是否存在)
+    if (firebaseConfig.apiKey) {
         app = initializeApp(firebaseConfig);
         db = getFirestore(app);
+        console.log("Firebase initialized successfully with env vars");
     } else {
-        console.warn("Firebase config is missing. Please update services/firebase.ts");
+        console.warn("Firebase config is missing. Please check your .env.local file.");
     }
 } catch (e) {
     console.error("Firebase init error:", e);
