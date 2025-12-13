@@ -1,50 +1,48 @@
-import { initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, setDoc, getDoc } from 'firebase/firestore';
+import { getAnalytics } from "firebase/analytics";
 
-// TODO: Replace with your actual Firebase project configuration
+// 透過環境變數讀取設定
 const firebaseConfig = {
-  apiKey: "AIzaSyBZjmlWMFi6tnqldHL0T6PHVMJSv32RO3w",
-  authDomain: "travel-app-a41a6.firebaseapp.com",
-  projectId: "travel-app-a41a6",
-  storageBucket: "travel-app-a41a6.firebasestorage.app",
-  messagingSenderId: "61125297760",
-  appId: "1:61125297760:web:1446bced80119165caa505"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Initialize Firebase
-let app;
-let db: any;
+// 初始化 Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const analytics = getAnalytics(app);
 
-try {
-    app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-} catch (error) {
-    console.error("Firebase Initialization Error:", error);
-}
+export { db };
 
-// Helper to get a consistent Device ID for this browser
-const getDeviceId = () => {
+// ------------------------------------------------------------------
+// 以下保留原本的輔助函式 (不需要更動)
+// ------------------------------------------------------------------
+
+export const getDeviceId = () => {
     let id = localStorage.getItem('wanderlist_device_id');
     if (!id) {
-        id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        id = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         localStorage.setItem('wanderlist_device_id', id);
     }
     return id;
 };
 
-// Ensure the current "Device User" exists in the users collection
-const ensureUserExists = async (deviceId: string) => {
+export const ensureUserExists = async (userId: string, defaultName: string = '訪客') => {
     if (!db) return;
-    const userRef = doc(db, 'users', deviceId);
-    const userSnap = await getDoc(userRef);
-
-    if (!userSnap.exists()) {
+    const userRef = doc(db, 'users', userId);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) {
         await setDoc(userRef, {
-            id: deviceId,
-            name: '訪客',
-            avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Felix'
+            id: userId,
+            name: defaultName,
+            avatar: 'https://api.dicebear.com/9.x/avataaars/svg?seed=' + userId
         });
     }
+    return snap.exists() ? snap.data() : { id: userId, name: defaultName };
 };
-
-export { db, getDeviceId, ensureUserExists };
