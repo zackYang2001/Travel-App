@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DayItinerary, ItineraryItem } from '../types';
 import { generateItinerarySuggestions, suggestIconForCategory, getPlaceCoordinates } from '../services/geminiService';
-import { getWeatherForDate } from '../services/weatherService';
+import { fetchWeatherForLocation } from '../services/weatherService';
 import { DEFAULT_TYPES } from '../constants';
 
 interface ItineraryViewProps {
@@ -135,12 +135,18 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
 
   const currentDay = days.find(d => d.id === selectedDayId) || days[0];
 
+  // Async Weather Fetching
   useEffect(() => {
-    if (currentDay && !currentDay.weather) {
-       const weather = getWeatherForDate(currentDay.date);
-       setDays(prev => prev.map(d => d.id === currentDay.id ? { ...d, weather } : d));
-    }
-  }, [currentDay?.id, currentDay?.date, setDays]);
+    const fetchWeather = async () => {
+        if (currentDay && !currentDay.weather && destination) {
+            const weather = await fetchWeatherForLocation(destination, currentDay.date);
+            if (weather) {
+                setDays(prev => prev.map(d => d.id === currentDay.id ? { ...d, weather } : d));
+            }
+        }
+    };
+    fetchWeather();
+  }, [currentDay?.id, currentDay?.date, destination, setDays]); // Removed currentDay.weather from dependency to avoid loop if it stays undefined, logic inside handles checks
 
   const resetForms = () => {
     setEditingItemId(null);

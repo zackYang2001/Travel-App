@@ -194,7 +194,11 @@ const MapView: React.FC<MapViewProps> = ({ days, isDarkMode }) => {
   if (!currentDay) return <div className="p-10 text-center text-gray-400 dark:text-gray-500">請先建立行程天數</div>;
 
   return (
-    <div className="h-full w-full relative bg-[#F2F2F7] dark:bg-slate-950 overflow-hidden">
+    <div 
+        className="h-full w-full relative bg-[#F2F2F7] dark:bg-slate-950 overflow-hidden"
+        onTouchStart={(e) => e.stopPropagation()} 
+        onTouchEnd={(e) => e.stopPropagation()}
+    >
       
       {/* Map Area - Full Screen Absolute */}
       <div ref={mapContainerRef} className="absolute inset-0 z-0 bg-gray-200 dark:bg-slate-800"></div>
