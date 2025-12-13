@@ -812,14 +812,16 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays }) => {
                </div>
 
                {/* Origin & Destination */}
-               <div className="flex gap-2 items-start">
-                 <div className="flex-1 min-w-0">
+               <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-start">
+                 <div className="w-full">
                     <label className="block text-xs font-bold text-gray-400 mb-1 pl-1 text-center">出發地</label>
                     <input type="text" placeholder="TPE" value={flightOrigin} onChange={e => setFlightOrigin(e.target.value.toUpperCase())} className="w-full p-3 bg-gray-50 dark:bg-slate-800/50 dark:focus:bg-slate-800 border border-transparent dark:border-white/5 rounded-2xl font-mono uppercase text-center font-black text-xl outline-none text-black dark:text-white focus:bg-blue-50 dark:focus:bg-slate-700 transition-all mb-2" />
                     <input type="text" placeholder="航廈 T1" value={flightOriginTerminal} onChange={e => setFlightOriginTerminal(e.target.value.toUpperCase())} className="w-full p-2 bg-gray-50 dark:bg-slate-800/50 dark:focus:bg-slate-800 border border-transparent dark:border-white/5 rounded-xl font-mono uppercase text-center text-sm font-bold outline-none text-black dark:text-white focus:bg-blue-50 dark:focus:bg-slate-700 transition-all" />
                  </div>
-                 <i className="fa-solid fa-plane text-gray-300 transform rotate-90 mt-8 shrink-0"></i>
-                 <div className="flex-1 min-w-0">
+                 <div className="flex h-full pt-8 items-center justify-center">
+                     <i className="fa-solid fa-plane text-gray-300 dark:text-gray-600 transform rotate-90"></i>
+                 </div>
+                 <div className="w-full">
                     <label className="block text-xs font-bold text-gray-400 mb-1 pl-1 text-center">目的地</label>
                     <input type="text" placeholder="PVG" value={flightDestination} onChange={e => setFlightDestination(e.target.value.toUpperCase())} className="w-full p-3 bg-gray-50 dark:bg-slate-800/50 dark:focus:bg-slate-800 border border-transparent dark:border-white/5 rounded-2xl font-mono uppercase text-center font-black text-xl outline-none text-black dark:text-white focus:bg-blue-50 dark:focus:bg-slate-700 transition-all mb-2" />
                     <input type="text" placeholder="航廈 T2" value={flightDestTerminal} onChange={e => setFlightDestTerminal(e.target.value.toUpperCase())} className="w-full p-2 bg-gray-50 dark:bg-slate-800/50 dark:focus:bg-slate-800 border border-transparent dark:border-white/5 rounded-xl font-mono uppercase text-center text-sm font-bold outline-none text-black dark:text-white focus:bg-blue-50 dark:focus:bg-slate-700 transition-all" />
@@ -827,12 +829,12 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays }) => {
                </div>
 
                {/* Departure & Arrival Time (Side by Side) */}
-               <div className="flex gap-3">
-                 <div className="flex-1 min-w-0">
+               <div className="grid grid-cols-2 gap-3">
+                 <div className="w-full">
                     <label className="block text-xs font-bold text-gray-400 mb-1 pl-1">出發時間</label>
                     <input type="time" value={flightDepTime} onChange={e => setFlightDepTime(e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-slate-800/50 dark:focus:bg-slate-800 border border-transparent dark:border-white/5 rounded-2xl font-bold outline-none text-black dark:text-white focus:bg-blue-50 dark:focus:bg-slate-700 transition-all dark:[color-scheme:dark]" />
                  </div>
-                 <div className="flex-1 min-w-0">
+                 <div className="w-full">
                     <label className="block text-xs font-bold text-gray-400 mb-1 pl-1">抵達時間</label>
                     <input type="time" value={flightArrTime} onChange={e => setFlightArrTime(e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-slate-800/50 dark:focus:bg-slate-800 border border-transparent dark:border-white/5 rounded-2xl font-bold outline-none text-black dark:text-white focus:bg-blue-50 dark:focus:bg-slate-700 transition-all dark:[color-scheme:dark]" />
                  </div>
