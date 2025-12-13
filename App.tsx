@@ -36,6 +36,10 @@ const App: React.FC = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [editingUser, setEditingUser] = useState<{name: string, avatar: string}>({ name: '', avatar: '' });
 
+  // Trip Edit Modal
+  const [showTripSettings, setShowTripSettings] = useState(false);
+  const [editingTrip, setEditingTrip] = useState<{destination: string, startDate: string, endDate: string, coverImage: string}>({ destination: '', startDate: '', endDate: '', coverImage: '' });
+
   // Initialize Theme
   useEffect(() => {
     if (isDarkMode) {
@@ -220,6 +224,97 @@ const App: React.FC = () => {
       updateDoc(doc(db, 'trips', activeTrip.id), { expenses: sanitizeForFirestore(newExpenses) });
   };
 
+  // Logic to handle Trip Update
+  const handleOpenTripSettings = () => {
+      if (!activeTrip) return;
+      setEditingTrip({
+          destination: activeTrip.destination,
+          startDate: activeTrip.startDate,
+          endDate: activeTrip.endDate,
+          coverImage: activeTrip.coverImage
+      });
+      setShowTripSettings(true);
+  };
+
+  const handleSaveTripSettings = async () => {
+      if (!activeTrip) return;
+      if (!editingTrip.destination || !editingTrip.startDate || !editingTrip.endDate) {
+          alert("請完整填寫資訊");
+          return;
+      }
+
+      const start = new Date(editingTrip.startDate);
+      const end = new Date(editingTrip.endDate);
+      if (start > end) {
+          alert("結束日期不能早於開始日期");
+          return;
+      }
+
+      // Calculate Day Adjustments
+      const oldStart = new Date(activeTrip.startDate);
+      const timeDiff = start.getTime() - oldStart.getTime();
+      const dayDiff = Math.round(timeDiff / (1000 * 3600 * 24));
+      
+      const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
+
+      // Create new days array
+      let newDays = [...activeTrip.days];
+
+      // 1. Shift dates
+      if (dayDiff !== 0) {
+          newDays = newDays.map(day => {
+              const d = new Date(day.date);
+              d.setDate(d.getDate() + dayDiff);
+              return { ...day, date: d.toISOString().split('T')[0] };
+          });
+      }
+
+      // 2. Adjust Length
+      if (newDays.length > totalDays) {
+          // Truncate
+          if (window.confirm("新的日期範圍較短，將會刪除多餘的天數行程。確定嗎？")) {
+             newDays = newDays.slice(0, totalDays);
+          } else {
+              return; // Cancel
+          }
+      } else if (newDays.length < totalDays) {
+          // Append
+          const daysToAdd = totalDays - newDays.length;
+          const lastDate = newDays.length > 0 ? new Date(newDays[newDays.length - 1].date) : new Date(start);
+          if (newDays.length === 0) lastDate.setDate(lastDate.getDate() - 1); // Adjust if starting from 0
+
+          for (let i = 0; i < daysToAdd; i++) {
+              lastDate.setDate(lastDate.getDate() + 1);
+              newDays.push({
+                  id: `d-${Date.now()}-${i}`,
+                  date: lastDate.toISOString().split('T')[0],
+                  dayLabel: `第 ${newDays.length + 1} 天`,
+                  items: []
+              });
+          }
+      }
+
+      // Update Local State
+      const updatedTrip = {
+          ...activeTrip,
+          destination: editingTrip.destination,
+          startDate: editingTrip.startDate,
+          endDate: editingTrip.endDate,
+          coverImage: editingTrip.coverImage,
+          days: newDays
+      };
+
+      if (!db) {
+          setTrips(trips.map(t => t.id === activeTrip.id ? updatedTrip : t));
+      } else {
+          // Optimistic
+          setTrips(trips.map(t => t.id === activeTrip.id ? updatedTrip : t));
+          await updateDoc(doc(db, 'trips', activeTrip.id), sanitizeForFirestore(updatedTrip));
+      }
+
+      setShowTripSettings(false);
+  };
+
   // View Routing
   if (!activeTripId) {
       return (
@@ -245,7 +340,14 @@ const App: React.FC = () => {
             <i className="fa-solid fa-chevron-left"></i>
         </button>
         
-        <h1 className="text-lg font-black text-center flex-1 truncate mx-2 dark:text-white">{activeTrip.destination}</h1>
+        {/* Clickable Title for Editing */}
+        <button onClick={handleOpenTripSettings} className="flex-1 truncate mx-2 flex flex-col items-center justify-center group">
+            <h1 className="text-lg font-black text-center dark:text-white flex items-center gap-2 group-hover:text-blue-500 transition-colors">
+                {activeTrip.destination}
+                <i className="fa-solid fa-pen text-[10px] opacity-0 group-hover:opacity-100 transition-opacity text-blue-500"></i>
+            </h1>
+            <span className="text-[10px] text-gray-400 font-mono font-bold">{activeTrip.startDate.replace(/-/g, '.')} - {activeTrip.endDate.replace(/-/g, '.')}</span>
+        </button>
         
         <div className="flex gap-2">
              <button 
@@ -328,6 +430,49 @@ const App: React.FC = () => {
                          <input type="text" value={editingUser.name} onChange={e => setEditingUser({...editingUser, name: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all placeholder-gray-300" placeholder="您的名字" />
                      </div>
                      <button onClick={handleUpdateUser} className="w-full py-4 bg-black dark:bg-blue-600 rounded-2xl text-white font-bold shadow-lg hover:bg-gray-800 dark:hover:bg-blue-500 transition-all">儲存設定</button>
+                 </div>
+             </div>
+        </div>
+      )}
+
+      {/* Trip Settings Modal */}
+      {showTripSettings && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
+             <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-2xl max-w-sm w-full border border-white/50 dark:border-white/10 animate-scale-up">
+                 <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-black text-black dark:text-white flex items-center gap-2"><i className="fa-solid fa-gear text-blue-500"></i> 行程設定</h3>
+                    <button onClick={() => setShowTripSettings(false)} className="w-8 h-8 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"><i className="fa-solid fa-xmark"></i></button>
+                 </div>
+                 
+                 <div className="space-y-4">
+                     <div>
+                         <label className="block text-xs font-bold text-gray-400 uppercase mb-2">行程名稱</label>
+                         <input type="text" value={editingTrip.destination} onChange={e => setEditingTrip({...editingTrip, destination: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all placeholder-gray-300" />
+                     </div>
+                     
+                     <div>
+                         <label className="block text-xs font-bold text-gray-400 uppercase mb-2">封面圖片 (URL)</label>
+                         <input type="text" value={editingTrip.coverImage} onChange={e => setEditingTrip({...editingTrip, coverImage: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-xs font-mono text-black dark:text-white border border-transparent focus:border-blue-500 transition-all placeholder-gray-300" />
+                     </div>
+
+                     <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">開始日期</label>
+                            <input type="date" value={editingTrip.startDate} onChange={e => setEditingTrip({...editingTrip, startDate: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all dark:[color-scheme:dark]" />
+                        </div>
+                        <i className="fa-solid fa-arrow-right text-gray-300 mt-6"></i>
+                        <div className="flex-1">
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">結束日期</label>
+                            <input type="date" value={editingTrip.endDate} onChange={e => setEditingTrip({...editingTrip, endDate: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all dark:[color-scheme:dark]" />
+                        </div>
+                     </div>
+
+                     <p className="text-xs text-gray-400 px-1 bg-yellow-50 dark:bg-yellow-900/10 p-2 rounded-lg border border-yellow-100 dark:border-yellow-900/30 flex items-start gap-2">
+                        <i className="fa-solid fa-triangle-exclamation text-yellow-500 mt-0.5"></i>
+                        <span>修改日期將會自動調整天數與現有行程的日期。若縮短天數，多餘的行程將被刪除。</span>
+                     </p>
+
+                     <button onClick={handleSaveTripSettings} className="w-full py-4 bg-black dark:bg-blue-600 rounded-2xl text-white font-bold shadow-lg hover:bg-gray-800 dark:hover:bg-blue-500 transition-all">儲存變更</button>
                  </div>
              </div>
         </div>
