@@ -38,7 +38,13 @@ const App: React.FC = () => {
 
   // Trip Edit Modal
   const [showTripSettings, setShowTripSettings] = useState(false);
-  const [editingTrip, setEditingTrip] = useState<{destination: string, startDate: string, endDate: string, coverImage: string}>({ destination: '', startDate: '', endDate: '', coverImage: '' });
+  const [editingTrip, setEditingTrip] = useState<{
+      destination: string, 
+      startDate: string, 
+      endDate: string, 
+      coverImage: string,
+      coverImageDark: string
+  }>({ destination: '', startDate: '', endDate: '', coverImage: '', coverImageDark: '' });
 
   // Initialize Theme
   useEffect(() => {
@@ -231,7 +237,8 @@ const App: React.FC = () => {
           destination: activeTrip.destination,
           startDate: activeTrip.startDate,
           endDate: activeTrip.endDate,
-          coverImage: activeTrip.coverImage
+          coverImage: activeTrip.coverImage,
+          coverImageDark: activeTrip.coverImageDark || ''
       });
       setShowTripSettings(true);
   };
@@ -301,6 +308,7 @@ const App: React.FC = () => {
           startDate: editingTrip.startDate,
           endDate: editingTrip.endDate,
           coverImage: editingTrip.coverImage,
+          coverImageDark: editingTrip.coverImageDark,
           days: newDays
       };
 
@@ -447,23 +455,29 @@ const App: React.FC = () => {
                  <div className="space-y-4">
                      <div>
                          <label className="block text-xs font-bold text-gray-400 uppercase mb-2">行程名稱</label>
-                         <input type="text" value={editingTrip.destination} onChange={e => setEditingTrip({...editingTrip, destination: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all placeholder-gray-300" />
+                         <input type="text" value={editingTrip.destination} onChange={e => setEditingTrip({...editingTrip, destination: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all placeholder-gray-300" />
                      </div>
                      
-                     <div>
-                         <label className="block text-xs font-bold text-gray-400 uppercase mb-2">封面圖片 (URL)</label>
-                         <input type="text" value={editingTrip.coverImage} onChange={e => setEditingTrip({...editingTrip, coverImage: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-xs font-mono text-black dark:text-white border border-transparent focus:border-blue-500 transition-all placeholder-gray-300" />
+                     <div className="grid grid-cols-2 gap-3">
+                         <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">封面 (淺色/預設)</label>
+                            <input type="text" placeholder="URL" value={editingTrip.coverImage} onChange={e => setEditingTrip({...editingTrip, coverImage: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl outline-none font-bold text-xs font-mono text-black dark:text-white border border-transparent focus:border-blue-500 transition-all placeholder-gray-300" />
+                         </div>
+                         <div>
+                            <label className="block text-xs font-bold text-gray-400 uppercase mb-2">封面 (深色/選填)</label>
+                            <input type="text" placeholder="URL" value={editingTrip.coverImageDark} onChange={e => setEditingTrip({...editingTrip, coverImageDark: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl outline-none font-bold text-xs font-mono text-black dark:text-white border border-transparent focus:border-blue-500 transition-all placeholder-gray-300" />
+                         </div>
                      </div>
 
-                     <div className="flex items-center gap-2">
-                        <div className="flex-1">
+                     <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-end">
+                        <div className="w-full">
                             <label className="block text-xs font-bold text-gray-400 uppercase mb-2">開始日期</label>
-                            <input type="date" value={editingTrip.startDate} onChange={e => setEditingTrip({...editingTrip, startDate: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all dark:[color-scheme:dark]" />
+                            <input type="date" value={editingTrip.startDate} onChange={e => setEditingTrip({...editingTrip, startDate: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all dark:[color-scheme:dark] text-sm" />
                         </div>
-                        <i className="fa-solid fa-arrow-right text-gray-300 mt-6"></i>
-                        <div className="flex-1">
+                        <i className="fa-solid fa-arrow-right text-gray-300 dark:text-gray-600 mb-4 text-xs"></i>
+                        <div className="w-full">
                             <label className="block text-xs font-bold text-gray-400 uppercase mb-2">結束日期</label>
-                            <input type="date" value={editingTrip.endDate} onChange={e => setEditingTrip({...editingTrip, endDate: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-4 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all dark:[color-scheme:dark]" />
+                            <input type="date" value={editingTrip.endDate} onChange={e => setEditingTrip({...editingTrip, endDate: e.target.value})} className="w-full bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl outline-none font-bold text-black dark:text-white border border-transparent focus:border-blue-500 transition-all dark:[color-scheme:dark] text-sm" />
                         </div>
                      </div>
 
