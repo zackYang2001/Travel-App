@@ -1,8 +1,14 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { ItineraryItem } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// ------------------------------------------------------------------
+// 修正重點 1: 變數名稱改為 process.env.GEMINI_API_KEY 
+// 修正重點 2: 加上 || "demo-key" 防止程式在啟動時直接崩潰
+// ------------------------------------------------------------------
+const apiKey = process.env.GEMINI_API_KEY || "demo-key";
+
+// 初始化 AI
+const ai = new GoogleGenAI({ apiKey });
 
 export const generateItinerarySuggestions = async (prompt: string): Promise<ItineraryItem[]> => {
   try {
@@ -57,7 +63,9 @@ export const generateItinerarySuggestions = async (prompt: string): Promise<Itin
 
   } catch (error) {
     console.error("Gemini API Error:", error);
-    throw error;
+    // 修正重點 3: 失敗時回傳空陣列 [] 而不是 throw error
+    // 這樣就算 AI 壞掉，您的網頁也不會整個當機
+    return []; 
   }
 };
 
