@@ -43,8 +43,9 @@ const App: React.FC = () => {
       startDate: string, 
       endDate: string, 
       coverImage: string,
-      coverImageDark: string
-  }>({ destination: '', startDate: '', endDate: '', coverImage: '', coverImageDark: '' });
+      coverImageDark: string,
+      participants: string[]
+  }>({ destination: '', startDate: '', endDate: '', coverImage: '', coverImageDark: '', participants: [] });
 
   // Initialize Theme
   useEffect(() => {
@@ -205,6 +206,27 @@ const App: React.FC = () => {
 
   const activeTrip = trips.find(t => t.id === activeTripId);
 
+  // Filter Users for Expense View: Only show participants or (if legacy/empty) current user
+  const tripUsers = React.useMemo(() => {
+      if (!activeTrip) return [];
+      
+      // If participants list exists and has items, use it to filter global users
+      if (activeTrip.participants && activeTrip.participants.length > 0) {
+          return users.filter(u => activeTrip.participants?.includes(u.id));
+      }
+      
+      // Fallback for legacy trips or empty participants: Show only current user (and maybe anyone who already paid)
+      // This forces the user to "Add" people via settings if they want to split with others, cleaner UI.
+      if (currentUser) {
+          // Check if there are existing expenses with other payers, include them to avoid breaking UI
+          const activePayers = new Set(activeTrip.expenses.map(e => e.payerId));
+          activePayers.add(currentUser.id);
+          return users.filter(u => activePayers.has(u.id));
+      }
+      
+      return [];
+  }, [activeTrip, users, currentUser]);
+
   // Wrappers to update specific fields of the active trip
   const setDaysWrapper = (action: React.SetStateAction<DayItinerary[]>) => {
       if (!activeTrip) return;
@@ -238,9 +260,20 @@ const App: React.FC = () => {
           startDate: activeTrip.startDate,
           endDate: activeTrip.endDate,
           coverImage: activeTrip.coverImage,
-          coverImageDark: activeTrip.coverImageDark || ''
+          coverImageDark: activeTrip.coverImageDark || '',
+          participants: activeTrip.participants || (currentUser ? [currentUser.id] : [])
       });
       setShowTripSettings(true);
+  };
+
+  const handleToggleParticipant = (userId: string) => {
+      setEditingTrip(prev => {
+          if (prev.participants.includes(userId)) {
+              return { ...prev, participants: prev.participants.filter(id => id !== userId) };
+          } else {
+              return { ...prev, participants: [...prev.participants, userId] };
+          }
+      });
   };
 
   const handleSaveTripSettings = async () => {
@@ -301,6 +334,11 @@ const App: React.FC = () => {
           }
       }
 
+      // Ensure at least the current user is a participant if empty
+      const finalParticipants = editingTrip.participants.length > 0 
+          ? editingTrip.participants 
+          : (currentUser ? [currentUser.id] : []);
+
       // Update Local State
       const updatedTrip = {
           ...activeTrip,
@@ -309,7 +347,8 @@ const App: React.FC = () => {
           endDate: editingTrip.endDate,
           coverImage: editingTrip.coverImage,
           coverImageDark: editingTrip.coverImageDark,
-          days: newDays
+          days: newDays,
+          participants: finalParticipants
       };
 
       if (!db) {
@@ -333,6 +372,7 @@ const App: React.FC = () => {
             onDeleteTrip={handleDeleteTrip}
             isDarkMode={isDarkMode}
             toggleTheme={toggleTheme}
+            currentUserId={currentUser?.id}
           />
       );
   }
@@ -377,7 +417,8 @@ const App: React.FC = () => {
       {/* Main Content */}
       <div className="flex-1 overflow-hidden relative">
          {activeTab === AppTab.ITINERARY && <ItineraryView days={activeTrip.days} setDays={setDaysWrapper} />}
-         {activeTab === AppTab.EXPENSES && <ExpenseView expenses={activeTrip.expenses} setExpenses={setExpensesWrapper} users={users} />}
+         {/* Pass only the relevant tripUsers to ExpenseView */}
+         {activeTab === AppTab.EXPENSES && <ExpenseView expenses={activeTrip.expenses} setExpenses={setExpensesWrapper} users={tripUsers} />}
          {activeTab === AppTab.MAP && <MapView days={activeTrip.days} isDarkMode={isDarkMode} />}
       </div>
 
@@ -446,7 +487,7 @@ const App: React.FC = () => {
       {/* Trip Settings Modal */}
       {showTripSettings && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/30 dark:bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-             <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-2xl max-w-sm w-full border border-white/50 dark:border-white/10 animate-scale-up">
+             <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 shadow-2xl max-w-sm w-full border border-white/50 dark:border-white/10 animate-scale-up max-h-[85vh] overflow-y-auto no-scrollbar">
                  <div className="flex justify-between items-center mb-6">
                     <h3 className="text-xl font-black text-black dark:text-white flex items-center gap-2"><i className="fa-solid fa-gear text-blue-500"></i> 行程設定</h3>
                     <button onClick={() => setShowTripSettings(false)} className="w-8 h-8 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors"><i className="fa-solid fa-xmark"></i></button>
@@ -485,6 +526,25 @@ const App: React.FC = () => {
                         <i className="fa-solid fa-triangle-exclamation text-yellow-500 mt-0.5"></i>
                         <span>修改日期將會自動調整天數與現有行程的日期。若縮短天數，多餘的行程將被刪除。</span>
                      </p>
+
+                     {/* Participants Management Section */}
+                     <div className="pt-2">
+                        <label className="block text-xs font-bold text-gray-400 uppercase mb-2">旅伴管理 ({editingTrip.participants.length} 人)</label>
+                        <div className="bg-gray-50 dark:bg-slate-800/50 rounded-2xl p-2 max-h-40 overflow-y-auto no-scrollbar space-y-1">
+                            {users.map(user => {
+                                const isSelected = editingTrip.participants.includes(user.id);
+                                return (
+                                    <div key={user.id} onClick={() => handleToggleParticipant(user.id)} className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-colors ${isSelected ? 'bg-white dark:bg-slate-700 shadow-sm' : 'hover:bg-gray-100 dark:hover:bg-slate-700/50'}`}>
+                                        <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 dark:border-slate-600'}`}>
+                                            {isSelected && <i className="fa-solid fa-check text-white text-[10px]"></i>}
+                                        </div>
+                                        <img src={user.avatar} className="w-8 h-8 rounded-full bg-gray-200" alt="" />
+                                        <span className={`text-sm font-bold flex-1 ${isSelected ? 'text-black dark:text-white' : 'text-gray-500 dark:text-gray-500'}`}>{user.name} {user.id === currentUser?.id && '(我)'}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                     </div>
 
                      <button onClick={handleSaveTripSettings} className="w-full py-4 bg-black dark:bg-blue-600 rounded-2xl text-white font-bold shadow-lg hover:bg-gray-800 dark:hover:bg-blue-500 transition-all">儲存變更</button>
                  </div>

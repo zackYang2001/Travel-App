@@ -67,6 +67,7 @@ export interface Trip {
   coverImageDark?: string; // Optional dark mode specific image
   days: DayItinerary[];
   expenses: Expense[];
+  participants?: string[]; // List of User IDs who are in this trip
 }
 
 export enum AppTab {

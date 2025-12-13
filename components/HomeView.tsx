@@ -8,9 +8,10 @@ interface HomeViewProps {
   onDeleteTrip: (tripId: string) => void;
   isDarkMode: boolean;
   toggleTheme: () => void;
+  currentUserId?: string;
 }
 
-const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onDeleteTrip, isDarkMode, toggleTheme }) => {
+const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onDeleteTrip, isDarkMode, toggleTheme, currentUserId }) => {
   const [showSheet, setShowSheet] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [destination, setDestination] = useState('');
@@ -57,7 +58,8 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
         destination, startDate, endDate,
         coverImage: finalImage,
         coverImageDark: coverImageDark.trim(),
-        days: daysArr, expenses: []
+        days: daysArr, expenses: [],
+        participants: currentUserId ? [currentUserId] : [] // Auto-add creator
     };
     onAddTrip(newTrip);
     closeSheet();
