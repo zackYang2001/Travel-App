@@ -416,7 +416,7 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 overflow-hidden relative">
-         {activeTab === AppTab.ITINERARY && <ItineraryView days={activeTrip.days} setDays={setDaysWrapper} />}
+         {activeTab === AppTab.ITINERARY && <ItineraryView days={activeTrip.days} setDays={setDaysWrapper} destination={activeTrip.destination} />}
          {/* Pass only the relevant tripUsers to ExpenseView */}
          {activeTab === AppTab.EXPENSES && <ExpenseView expenses={activeTrip.expenses} setExpenses={setExpensesWrapper} users={tripUsers} />}
          {activeTab === AppTab.MAP && <MapView days={activeTrip.days} isDarkMode={isDarkMode} />}

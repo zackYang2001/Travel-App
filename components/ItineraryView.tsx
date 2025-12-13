@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DayItinerary, ItineraryItem } from '../types';
-import { generateItinerarySuggestions, suggestIconForCategory } from '../services/geminiService';
+import { generateItinerarySuggestions, suggestIconForCategory, getPlaceCoordinates } from '../services/geminiService';
 import { getWeatherForDate } from '../services/weatherService';
 import { DEFAULT_TYPES } from '../constants';
 
 interface ItineraryViewProps {
   days: DayItinerary[];
   setDays: React.Dispatch<React.SetStateAction<DayItinerary[]>>;
+  destination?: string;
 }
 
-const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays }) => {
+const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destination }) => {
   const [selectedDayId, setSelectedDayId] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   
@@ -56,6 +57,10 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays }) => {
   const [manualRating, setManualRating] = useState('4.5');
   const [manualOpenTime, setManualOpenTime] = useState('');
   const [manualImage, setManualImage] = useState('');
+  // Manual Location Coords
+  const [manualLat, setManualLat] = useState<number | string>('');
+  const [manualLng, setManualLng] = useState<number | string>('');
+  const [isLocating, setIsLocating] = useState(false);
 
   const [availableTypes, setAvailableTypes] = useState(DEFAULT_TYPES);
   const [isManagingTypes, setIsManagingTypes] = useState(false);
@@ -147,6 +152,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays }) => {
     setManualOpenTime(''); setManualImage('');
     setManualRating('4.5');
     setManualType('sightseeing');
+    setManualLat(''); setManualLng('');
     setIsManagingTypes(false);
   };
 
@@ -172,6 +178,8 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays }) => {
         setManualRating(item.rating?.toString() || '');
         setManualOpenTime(item.openTime || '');
         setManualImage(item.imageUrl || '');
+        setManualLat(item.lat || '');
+        setManualLng(item.lng || '');
         setShowManualModal(true);
     }
     setIsFabOpen(false);
@@ -239,8 +247,34 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays }) => {
     resetForms();
   };
 
+  const handleAutoLocate = async () => {
+      if (!manualName.trim()) {
+          alert("請先輸入地點名稱");
+          return;
+      }
+      setIsLocating(true);
+      try {
+          // Pass the trip destination as context (e.g., "Shanghai")
+          const coords = await getPlaceCoordinates(manualName, destination);
+          if (coords) {
+              setManualLat(coords.lat);
+              setManualLng(coords.lng);
+          } else {
+              alert("找不到此地點，請嘗試輸入更完整的名稱（例如包含城市）");
+          }
+      } catch(e) {
+          alert("定位失敗，請稍後再試");
+      } finally {
+          setIsLocating(false);
+      }
+  };
+
   const handleSaveManual = () => {
     if (!manualName || !manualTime) return;
+    
+    const lat = manualLat ? parseFloat(manualLat.toString()) : undefined;
+    const lng = manualLng ? parseFloat(manualLng.toString()) : undefined;
+
     setDays(prev => prev.map(day => {
         if (day.id === selectedDayId) {
             const newItemData: ItineraryItem = {
@@ -253,8 +287,8 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays }) => {
                 openTime: manualOpenTime || undefined,
                 imageUrl: manualImage || undefined,
                 price: '$$',
-                lat: editingItemId ? day.items.find(i => i.id === editingItemId)?.lat || 0 : 0, 
-                lng: editingItemId ? day.items.find(i => i.id === editingItemId)?.lng || 0 : 0,
+                lat: lat !== undefined ? lat : (editingItemId ? day.items.find(i => i.id === editingItemId)?.lat : 0), 
+                lng: lng !== undefined ? lng : (editingItemId ? day.items.find(i => i.id === editingItemId)?.lng : 0),
             };
             const newItems = editingItemId ? day.items.map(i => i.id === editingItemId ? newItemData : i) : [...day.items, newItemData];
             return { ...day, items: newItems.sort((a, b) => a.time.localeCompare(b.time)) };
@@ -777,7 +811,35 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays }) => {
                     </div>
                 ) : (
                     <>
-                        <input type="text" placeholder="地點名稱" value={manualName} onChange={e => setManualName(e.target.value)} className="w-full p-3 bg-gray-50 dark:bg-slate-800/50 dark:focus:bg-slate-800 border border-transparent dark:border-white/5 rounded-2xl outline-none font-bold text-black dark:text-white" />
+                        <div className="flex gap-2">
+                            <input type="text" placeholder="地點名稱" value={manualName} onChange={e => setManualName(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-slate-800/50 dark:focus:bg-slate-800 border border-transparent dark:border-white/5 rounded-2xl outline-none font-bold text-black dark:text-white" />
+                            <button 
+                                onClick={handleAutoLocate} 
+                                disabled={isLocating}
+                                className={`px-4 rounded-2xl font-bold text-xs flex items-center gap-1 transition-all shrink-0
+                                    ${(manualLat && manualLng) 
+                                        ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 border border-green-200 dark:border-green-800'
+                                        : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-200'
+                                    }
+                                `}
+                            >
+                                {isLocating ? <i className="fa-solid fa-spinner fa-spin"></i> : (manualLat && manualLng) ? <i className="fa-solid fa-check"></i> : <i className="fa-solid fa-location-crosshairs"></i>}
+                                <span>{(manualLat && manualLng) ? '已定位' : '定位'}</span>
+                            </button>
+                        </div>
+
+                        {/* Explicit Lat/Lng Inputs */}
+                        <div className="flex gap-3">
+                             <div className="flex-1 bg-gray-50 dark:bg-slate-800/50 border border-transparent dark:border-white/5 p-3 rounded-2xl flex items-center justify-between">
+                                <span className="text-[10px] text-gray-400 font-bold mr-2 uppercase tracking-wider">LAT</span>
+                                <input type="number" placeholder="緯度" value={manualLat} onChange={e => setManualLat(e.target.value)} className="bg-transparent w-full text-right font-mono text-sm font-bold text-black dark:text-white outline-none" />
+                             </div>
+                             <div className="flex-1 bg-gray-50 dark:bg-slate-800/50 border border-transparent dark:border-white/5 p-3 rounded-2xl flex items-center justify-between">
+                                <span className="text-[10px] text-gray-400 font-bold mr-2 uppercase tracking-wider">LNG</span>
+                                <input type="number" placeholder="經度" value={manualLng} onChange={e => setManualLng(e.target.value)} className="bg-transparent w-full text-right font-mono text-sm font-bold text-black dark:text-white outline-none" />
+                             </div>
+                        </div>
+
                         <div className="flex gap-3">
                             <input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-slate-800/50 dark:focus:bg-slate-800 border border-transparent dark:border-white/5 rounded-xl outline-none font-bold text-black dark:text-white dark:[color-scheme:dark]" />
                             <div className="flex-1 relative">

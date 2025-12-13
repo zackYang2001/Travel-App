@@ -2,14 +2,16 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { ItineraryItem } from "../types";
 
 // ------------------------------------------------------------------
-// 修正重點 1: 變數名稱改為 process.env.GEMINI_API_KEY 
-// 修正重點 2: 加上 || "demo-key" 防止程式在啟動時直接崩潰
+// 設定 API Key
 // ------------------------------------------------------------------
 const apiKey = process.env.GEMINI_API_KEY || "demo-key";
 
-// 初始化 AI
+// 初始化 AI (全域共用一個實例)
 const ai = new GoogleGenAI({ apiKey });
 
+/**
+ * 根據使用者提示生成行程建議
+ */
 export const generateItinerarySuggestions = async (prompt: string): Promise<ItineraryItem[]> => {
   try {
     const fullPrompt = `You are a professional travel planner for Shanghai.
@@ -52,23 +54,23 @@ export const generateItinerarySuggestions = async (prompt: string): Promise<Itin
     
     const items = JSON.parse(text);
     
-    // Enrich with IDs
+    // Enrich with IDs and fallback coords
     return items.map((item: any, index: number) => ({
       ...item,
       id: `ai-${Date.now()}-${index}`,
-      // Fallback random offset if AI fails to give coords (unlikely with schema)
       lat: item.lat || 31.2304 + (Math.random() - 0.5) * 0.05, 
       lng: item.lng || 121.4737 + (Math.random() - 0.5) * 0.05,
     }));
 
   } catch (error) {
     console.error("Gemini API Error:", error);
-    // 修正重點 3: 失敗時回傳空陣列 [] 而不是 throw error
-    // 這樣就算 AI 壞掉，您的網頁也不會整個當機
     return []; 
   }
 };
 
+/**
+ * 根據分類建議 FontAwesome Icon
+ */
 export const suggestIconForCategory = async (category: string): Promise<string> => {
   try {
     const prompt = `Return a single FontAwesome 6 Free Solid icon class name (e.g., 'fa-camera') that best represents this travel category: "${category}". 
@@ -85,10 +87,44 @@ export const suggestIconForCategory = async (category: string): Promise<string> 
     });
     
     const icon = response.text?.trim() || 'fa-tag';
-    // Clean up if model returns 'fa-solid fa-xxx'
     return icon.replace('fa-solid ', '').replace('fas ', '');
   } catch (error) {
     console.error("Icon Gen Error:", error);
     return 'fa-tag';
+  }
+};
+
+/**
+ * 取得特定地點的經緯度 (新增功能)
+ */
+export const getPlaceCoordinates = async (location: string, cityContext?: string): Promise<{ lat: number; lng: number } | null> => {
+  try {
+    // 直接使用全域的 ai 實例，不需要 getAiClient()
+    const prompt = `Find the approximate Latitude and Longitude for this place: "${location}"${cityContext ? ` in ${cityContext}` : ''}.
+    Return strictly JSON format: { "lat": number, "lng": number }.
+    If the place is unknown or vague, try to find the most likely tourist spot with that name.`;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            lat: { type: Type.NUMBER },
+            lng: { type: Type.NUMBER },
+          },
+          required: ["lat", "lng"],
+        },
+      },
+    });
+
+    const text = response.text;
+    if (!text) return null;
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("Coordinate Gen Error:", error);
+    return null;
   }
 };
