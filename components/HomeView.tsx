@@ -17,6 +17,7 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [coverImage, setCoverImage] = useState('');
+  const [coverImageDark, setCoverImageDark] = useState('');
 
   // Delete Confirmation State
   const [deleteTripId, setDeleteTripId] = useState<string | null>(null);
@@ -55,11 +56,12 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
         name: `${destination} 之旅`,
         destination, startDate, endDate,
         coverImage: finalImage,
+        coverImageDark: coverImageDark.trim(),
         days: daysArr, expenses: []
     };
     onAddTrip(newTrip);
     closeSheet();
-    setDestination(''); setStartDate(''); setEndDate(''); setCoverImage('');
+    setDestination(''); setStartDate(''); setEndDate(''); setCoverImage(''); setCoverImageDark('');
   };
 
   const confirmDelete = () => {
@@ -126,9 +128,12 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
             ) : (
                 trips.map(trip => {
                     const status = getTripStatus(trip.startDate, trip.endDate);
+                    // Decide which image to show
+                    const displayImage = (isDarkMode && trip.coverImageDark) ? trip.coverImageDark : trip.coverImage;
+
                     return (
                         <div key={trip.id} onClick={() => onSelectTrip(trip.id)} className="group relative h-64 rounded-[2rem] overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 cursor-pointer active:scale-95 bg-gray-900 dark:shadow-[0_0_20px_rgba(255,255,255,0.15)]">
-                            <img src={trip.coverImage} alt={trip.destination} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-100 dark:opacity-70" onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&q=80&w=800'; }} />
+                            <img src={displayImage} alt={trip.destination} className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-100 dark:opacity-70" onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&q=80&w=800'; }} />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80"></div>
                             <div className={`absolute top-5 left-5 px-3 py-1 rounded-full text-[10px] font-black tracking-widest backdrop-blur-md shadow-sm ${status.color}`}>{status.label}</div>
                             
@@ -194,12 +199,22 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
                  </div>
                </div>
                
-               <div className="group bg-white/40 dark:bg-black/30 p-4 rounded-2xl border border-white/50 dark:border-white/10 focus-within:bg-white/80 dark:focus-within:bg-black/50 dark:focus-within:border-cyan-500/50 transition-all">
-                 <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-500 uppercase tracking-wider mb-2 group-focus-within:dark:text-cyan-400 transition-colors">封面圖片 (URL)</label>
-                 <div className="flex items-center gap-3">
-                    <i className="fa-regular fa-image text-gray-400 dark:text-gray-600 group-focus-within:dark:text-cyan-400 transition-colors"></i>
-                    <input type="text" placeholder="https://..." value={coverImage} onChange={e => setCoverImage(e.target.value)} className="w-full bg-transparent outline-none font-bold text-sm text-black dark:text-white placeholder-gray-400 dark:placeholder-gray-600 font-mono" />
-                 </div>
+               {/* Cover Image Inputs */}
+               <div className="grid grid-cols-2 gap-3">
+                   <div className="group bg-white/40 dark:bg-black/30 p-4 rounded-2xl border border-white/50 dark:border-white/10 focus-within:bg-white/80 dark:focus-within:bg-black/50 dark:focus-within:border-cyan-500/50 transition-all">
+                     <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-500 uppercase tracking-wider mb-2 group-focus-within:dark:text-cyan-400 transition-colors">封面 (預設/淺色)</label>
+                     <div className="flex items-center gap-3">
+                        <i className="fa-regular fa-image text-gray-400 dark:text-gray-600 group-focus-within:dark:text-cyan-400 transition-colors"></i>
+                        <input type="text" placeholder="URL..." value={coverImage} onChange={e => setCoverImage(e.target.value)} className="w-full bg-transparent outline-none font-bold text-sm text-black dark:text-white placeholder-gray-400 dark:placeholder-gray-600 font-mono" />
+                     </div>
+                   </div>
+                   <div className="group bg-white/40 dark:bg-black/30 p-4 rounded-2xl border border-white/50 dark:border-white/10 focus-within:bg-white/80 dark:focus-within:bg-black/50 dark:focus-within:border-cyan-500/50 transition-all">
+                     <label className="block text-[10px] font-bold text-gray-500 dark:text-gray-500 uppercase tracking-wider mb-2 group-focus-within:dark:text-cyan-400 transition-colors">封面 (深色/選填)</label>
+                     <div className="flex items-center gap-3">
+                        <i className="fa-solid fa-moon text-gray-400 dark:text-gray-600 group-focus-within:dark:text-cyan-400 transition-colors"></i>
+                        <input type="text" placeholder="URL..." value={coverImageDark} onChange={e => setCoverImageDark(e.target.value)} className="w-full bg-transparent outline-none font-bold text-sm text-black dark:text-white placeholder-gray-400 dark:placeholder-gray-600 font-mono" />
+                     </div>
+                   </div>
                </div>
 
                <div className="flex items-center gap-3">

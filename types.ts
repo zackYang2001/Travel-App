@@ -64,6 +64,7 @@ export interface Trip {
   startDate: string;
   endDate: string;
   coverImage: string;
+  coverImageDark?: string; // Optional dark mode specific image
   days: DayItinerary[];
   expenses: Expense[];
 }
