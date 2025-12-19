@@ -13,9 +13,11 @@ export interface ItineraryItem {
   origin?: string; 
   destination?: string; 
   originTerminal?: string; 
-  destinationTerminal?: string; 
+  destTerminal?: string; 
   departureTime?: string;
   arrivalTime?: string;
+  gate?: string;
+  seat?: string;
   // New Metadata
   rating?: number;
   price?: string; // $, $$, $$$
