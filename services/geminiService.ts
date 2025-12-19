@@ -4,7 +4,12 @@ import { ItineraryItem } from "../types";
 
 // Helper to safely get API key
 const getAiClient = () => {
-  const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) ? process.env.API_KEY : '';
+  // Vite 使用 import.meta.env 來讀取變數
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+  
+  if (!apiKey) {
+    console.error("Gemini API Key is missing. Please check your .env.local and ensure it starts with VITE_");
+  }
   return new GoogleGenAI({ apiKey });
 };
 
