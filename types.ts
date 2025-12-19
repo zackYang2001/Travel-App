@@ -4,16 +4,16 @@ export interface ItineraryItem {
   time: string;
   location: string;
   description: string;
-  type: string; // Relaxed from union type to string to support custom types
+  type: string; 
   lat?: number;
   lng?: number;
   // Flight specific fields
   flightNumber?: string;
-  isArrival?: boolean; // true for landing, false for departure
-  origin?: string; // e.g. TPE
-  destination?: string; // e.g. PVG
-  originTerminal?: string; // e.g. T1
-  destinationTerminal?: string; // e.g. T2
+  isArrival?: boolean; 
+  origin?: string; 
+  destination?: string; 
+  originTerminal?: string; 
+  destinationTerminal?: string; 
   departureTime?: string;
   arrivalTime?: string;
   // New Metadata
@@ -21,6 +21,7 @@ export interface ItineraryItem {
   price?: string; // $, $$, $$$
   openTime?: string;
   imageUrl?: string;
+  imageOffsetY?: number; // 0 to 100 percentage
 }
 
 export interface DayItinerary {
