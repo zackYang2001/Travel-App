@@ -5,7 +5,7 @@ import { ItineraryItem } from "../types";
 // Helper to safely get API key
 const getAiClient = () => {
   // Vite 使用 import.meta.env 來讀取變數
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+  const apiKey = process.env.GEMINI_API_KEY || "demo-key";
   
   if (!apiKey) {
     console.error("Gemini API Key is missing. Please check your .env.local and ensure it starts with VITE_");
