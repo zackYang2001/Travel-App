@@ -77,10 +77,9 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
-  // Next Day Transition Logic (Max Tension)
-  const [showNextDayHint, setShowNextDayHint] = useState(false);
+  // Next Day Transition Logic (Lighter & Smoother)
   const [pullAmount, setPullAmount] = useState(0); 
-  const PULL_THRESHOLD = 300; // 進一步提高門檻，讓誤觸幾乎不可能發生
+  const PULL_THRESHOLD = 160; // 降低門檻，更好滑動
   const isTransitioning = useRef(false); 
   const wheelResetTimer = useRef<number | null>(null);
 
@@ -94,18 +93,17 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
         if (!isScrolled && currentScrollTop > 40) setIsScrolled(true);
         else if (isScrolled && currentScrollTop < 10) setIsScrolled(false);
 
-        // Check if we are at bottom
         const isAtBottom = currentScrollTop + clientHeight >= scrollHeight - 5;
-        setShowNextDayHint(isAtBottom);
-
-        if (!isAtBottom && pullAmount > 0) {
-            setPullAmount(0); 
-        }
-
-        // Mobile / iOS Bouncy Scroll Trigger
         const overScroll = (currentScrollTop + clientHeight) - scrollHeight;
-        if (overScroll > 120 && !isTransitioning.current) {
-            triggerNextDay();
+
+        if (isAtBottom && overScroll > 0) {
+            // 直接同步 overScroll 幅度
+            setPullAmount(overScroll);
+            if (overScroll > PULL_THRESHOLD && !isTransitioning.current) {
+                triggerNextDay();
+            }
+        } else if (pullAmount > 0) {
+            setPullAmount(0);
         }
     }
   };
@@ -117,9 +115,9 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
     const isAtBottom = scrollTop + clientHeight >= scrollHeight - 5;
 
     if (isAtBottom && e.deltaY > 0) {
-        // 極低係數，增加沈重的拉動力道感
-        const increment = e.deltaY * 0.1;
-        setPullAmount(prev => Math.min(prev + increment, PULL_THRESHOLD + 40));
+        // 加大係數，讓滾輪拉動也輕鬆一點
+        const increment = e.deltaY * 0.15;
+        setPullAmount(prev => Math.min(prev + increment, PULL_THRESHOLD + 20));
         
         if (pullAmount >= PULL_THRESHOLD) {
             triggerNextDay();
@@ -128,7 +126,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
         if (wheelResetTimer.current) window.clearTimeout(wheelResetTimer.current);
         wheelResetTimer.current = window.setTimeout(() => {
             setPullAmount(0);
-        }, 150);
+        }, 100);
     }
   };
 
@@ -147,10 +145,10 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
               scrollContainerRef.current.scrollTo({ top: 0, behavior: 'instant' });
           }
 
-          // 鎖定 1.5 秒防止連續跳轉
+          // 保持 500ms 的緩衝
           setTimeout(() => {
               isTransitioning.current = false;
-          }, 1500); 
+          }, 500); 
       }
   }, [days, selectedDayId]);
 
@@ -330,15 +328,12 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
 
   const handleDeleteItemClick = (itemId: string) => setDeleteConfirmation({ type: 'item', id: itemId });
 
-  // Day Long Press Handlers - Enhanced for Sticky Edit Mode
   const handleDayTouchStart = (dayId: string) => {
-      // 只有當不在編輯模式時才開始長按計時
       if (!isDayEditMode) {
           longPressTimer.current = window.setTimeout(() => {
               setIsDayEditMode(true);
-              // 手機震動回饋 (如果支援)
-              if (window.navigator.vibrate) window.navigator.vibrate(50);
-          }, 800);
+              if (window.navigator.vibrate) window.navigator.vibrate(60);
+          }, 700);
       }
   };
 
@@ -375,7 +370,6 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
         }
       }
       setDeleteConfirmation(null);
-      // 不要關閉編輯模式，讓使用者可以連續刪除
   };
 
   const handleDragStart = (e: React.DragEvent, position: number) => { dragItem.current = position; e.dataTransfer.effectAllowed = "move"; };
@@ -483,7 +477,6 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
         onClick={(e) => {
             if (isDayEditMode) {
                 const target = e.target as HTMLElement;
-                // 如果點擊的地方不在 day-selector-item 且不是「結束編輯」按鈕，就關閉編輯模式
                 if (!target.closest('.day-selector-item') && !target.closest('.end-edit-btn')) {
                     setIsDayEditMode(false);
                 }
@@ -508,7 +501,6 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                     onClick={(e) => { 
                         e.stopPropagation(); 
                         if (isDayEditMode) {
-                            // 在編輯模式下點擊天數按鈕：可切換但不關閉編輯
                             setSelectedDayId(day.id);
                         } else {
                             setSelectedDayId(day.id); 
@@ -606,52 +598,64 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
           </div>
         )}
 
-        {/* Next Day Transition Trigger (Maximum Tension UX) */}
+        {/* Next Day Transition Trigger - Smooth & Responsive */}
         <div 
-            className="mt-20 mb-32 flex flex-col items-center justify-center transition-all duration-300"
+            className="mt-12 mb-32 flex flex-col items-center justify-center transition-all duration-300"
             style={{ 
-                transform: `translateY(-${pullAmount * 0.35}px)`, 
-                opacity: 0.4 + (pullAmount / PULL_THRESHOLD) * 0.6 
+                transform: `translateY(-${pullAmount * 0.25}px)`, 
+                opacity: 0.3 + (pullAmount / PULL_THRESHOLD) * 0.7 
             }}
         >
             {nextDay ? (
-                <div className="flex flex-col items-center w-full max-w-[240px]">
-                    <div className="w-full flex justify-center mb-8 relative">
-                         <div className="w-[2px] h-16 bg-gradient-to-b from-gray-200 dark:from-slate-700 to-transparent rounded-full opacity-30"></div>
-                         {/* Progress Line - Stretching Down */}
-                         <div className="absolute top-0 w-[3px] bg-blue-500 rounded-full transition-all duration-100 ease-out" style={{ height: `${Math.min(pullProgress, 100)}%`, opacity: pullProgress / 100 }}></div>
+                <div className="flex flex-col items-center w-full max-w-[200px]">
+                    <div className="w-full flex justify-center mb-6 relative">
+                         <div className="w-[1.5px] h-14 bg-gray-200 dark:bg-slate-800 rounded-full opacity-30"></div>
+                         {/* Progress Line - Use Bezier for smoother stretching */}
+                         <div 
+                            className="absolute top-0 w-[2.5px] bg-blue-500 rounded-full transition-all duration-200 ease-[cubic-bezier(0.2,1,0.3,1)]" 
+                            style={{ 
+                                height: `${Math.min(pullProgress, 100)}%`, 
+                                opacity: pullProgress / 100,
+                                willChange: 'height, opacity'
+                            }}
+                         ></div>
                     </div>
                     
-                    <div className={`flex flex-col items-center transition-all duration-500 ${isReadyToTransition ? 'scale-110' : 'scale-100 opacity-60'}`}>
-                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${isReadyToTransition ? 'bg-blue-600 text-white shadow-xl' : 'bg-gray-100 dark:bg-slate-800 text-blue-500'}`}>
-                            <i className={`fa-solid fa-chevron-up text-xl ${isReadyToTransition ? 'animate-bounce' : 'animate-bounce-subtle'}`}></i>
+                    <div className={`flex flex-col items-center transition-all duration-500 ${isReadyToTransition ? 'scale-110' : 'scale-100 opacity-50'}`}>
+                        <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${isReadyToTransition ? 'bg-blue-600 text-white shadow-xl' : 'bg-gray-100 dark:bg-slate-800 text-blue-500'}`}>
+                            <i className={`fa-solid fa-chevron-up text-lg ${isReadyToTransition ? 'animate-bounce' : 'animate-bounce-subtle'}`}></i>
                         </div>
                         
-                        <p className={`text-[12px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${isReadyToTransition ? 'text-blue-600' : 'text-gray-400'}`}>
-                            {isReadyToTransition ? '放開切換天數' : '大力向下拉動'}
+                        <p className={`text-[11px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${isReadyToTransition ? 'text-blue-600' : 'text-gray-400'}`}>
+                            {isReadyToTransition ? '放開切換' : '繼續向下拉動'}
                         </p>
                         
-                        <h4 className="text-3xl font-black text-gray-900 dark:text-white mt-2 tracking-tight">{nextDay.dayLabel}</h4>
-                        <p className="text-[12px] font-bold text-blue-500/50 mt-1 uppercase tracking-wider">{nextDay.date.replace(/-/g, '/')}</p>
+                        <h4 className="text-2xl font-black text-gray-900 dark:text-white mt-1 tracking-tight">{nextDay.dayLabel}</h4>
                     </div>
                     
-                    {/* Progress Indicator Bar (Secondary Visual) */}
-                    <div className="w-full h-1 bg-gray-100 dark:bg-slate-800/50 rounded-full mt-10 overflow-hidden">
-                        <div className="h-full bg-blue-500 transition-all duration-100 ease-out" style={{ width: `${pullProgress}%` }}></div>
+                    {/* Horizontal Bar - Silky Smooth */}
+                    <div className="w-full h-1 bg-gray-100 dark:bg-slate-800/50 rounded-full mt-8 overflow-hidden">
+                        <div 
+                            className="h-full bg-blue-500 transition-all duration-200 ease-[cubic-bezier(0.2,1,0.3,1)]" 
+                            style={{ 
+                                width: `${pullProgress}%`,
+                                willChange: 'width'
+                            }}
+                        ></div>
                     </div>
                 </div>
             ) : (
                 <div className="py-16 flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-slate-800/50 flex items-center justify-center mb-4 border border-gray-200 dark:border-white/5">
-                        <i className="fa-solid fa-flag-checkered text-gray-400 text-xl"></i>
+                    <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-slate-800/50 flex items-center justify-center mb-4 border border-gray-200 dark:border-white/5 opacity-40">
+                        <i className="fa-solid fa-flag-checkered text-gray-400 text-lg"></i>
                     </div>
-                    <p className="text-[12px] font-black uppercase tracking-[0.2em] text-gray-400">已到達行程終點</p>
+                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 opacity-60">最後一天行程</p>
                 </div>
             )}
         </div>
       </div>
 
-      {/* Radial FAB - Fixed Shape */}
+      {/* Radial FAB - Fixed Shapes */}
       <div className="fixed bottom-28 right-6 z-40">
         {fabActions.map((btn, idx) => {
             const angleStep = 90 / (fabActions.length - 1);
@@ -669,16 +673,16 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                 </div>
             );
         })}
-        <button onClick={(e) => { e.stopPropagation(); setIsFabOpen(!isFabOpen); }} className={`relative z-50 w-16 h-16 aspect-square flex-shrink-0 rounded-full flex items-center justify-center text-2xl transition-all duration-300 bg-gradient-to-br from-white/40 to-white/5 dark:from-slate-700/50 dark:to-slate-800/30 border border-white/60 dark:border-white/10 shadow-[0_4px_20px_rgba(0,0,0,0.1),inset_0_0_10px_rgba(255,255,255,0.5)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.5),inset_0_0_10px_rgba(255,255,255,0.05)] backdrop-blur-[2px] ${isFabOpen ? 'text-white rotate-45 bg-black/80 dark:bg-white/90 dark:text-black border-transparent shadow-xl' : 'text-blue-600 dark:text-blue-400 hover:scale-105 active:scale-95'}`}>
+        <button onClick={(e) => { e.stopPropagation(); setIsFabOpen(!isFabOpen); }} className={`relative z-50 w-16 h-16 aspect-square flex-shrink-0 rounded-full flex items-center justify-center text-2xl transition-all duration-300 bg-gradient-to-br from-white/40 to-white/5 dark:from-slate-700/50 dark:to-slate-800/30 border border-white/60 dark:border-white/10 shadow-xl backdrop-blur-[2px] ${isFabOpen ? 'text-white rotate-45 bg-black/80 dark:bg-white/90 dark:text-black border-transparent' : 'text-blue-600 dark:text-blue-400 hover:scale-105 active:scale-95'}`}>
             <i className="fa-solid fa-plus drop-shadow-sm"></i>
         </button>
       </div>
 
-      {/* Manual Add/Edit Modal */}
+      {/* Manual Modal */}
       {showManualModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-scale-up border border-white/10 my-auto" onClick={(e) => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">{editingItemId ? '編輯行程' : '新增行程'}</h3><button onClick={() => setShowManualModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800"><i className="fa-solid fa-xmark"></i></button></div>
+                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">{editingItemId ? '編輯行程' : '新增行程'}</h3><button onClick={() => setShowManualModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 aspect-square"><i className="fa-solid fa-xmark"></i></button></div>
                 <div className="space-y-4">
                     <div className="relative group">
                         {manualImage ? (
@@ -686,11 +690,11 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                                 <img src={manualImage} className="w-full h-full object-cover transition-all" style={{ objectPosition: `center ${manualImageOffsetY}%` }} alt="Preview" />
                                 <div className="absolute inset-0 bg-black/20 flex items-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                      <div className="w-full bg-white/90 backdrop-blur rounded-lg p-2 flex flex-col gap-1">
-                                         <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">調整顯示區域 (垂直位置)</label>
+                                         <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">調整顯示區域</label>
                                          <input type="range" min="0" max="100" value={manualImageOffsetY} onChange={(e) => setManualImageOffsetY(parseInt(e.target.value))} className="w-full h-1 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-500" />
                                      </div>
                                 </div>
-                                <button onClick={() => {setManualImage(''); setManualImageOffsetY(50);}} className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full text-xs shadow-md"><i className="fa-solid fa-trash"></i></button>
+                                <button onClick={() => {setManualImage(''); setManualImageOffsetY(50);}} className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full text-xs shadow-md aspect-square"><i className="fa-solid fa-trash"></i></button>
                             </div>
                         ) : (
                             <label className="w-full h-24 border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-blue-300 dark:hover:border-blue-900 transition-all text-gray-400">
@@ -707,19 +711,9 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                             <span>自動抓取</span>
                         </button>
                     </div>
-                    {!manualImage && <input placeholder="或貼上圖片網址..." value={manualImage} onChange={e => setManualImage(e.target.value)} className="w-full p-2 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none text-[10px] font-mono dark:text-gray-400 border border-transparent focus:border-blue-100" />}
-                    <div className="grid grid-cols-2 gap-3">
-                         <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl flex items-center justify-between"><span className="text-[10px] text-gray-400 font-bold uppercase">LAT</span><input type="number" value={manualLat} onChange={e => setManualLat(e.target.value)} className="bg-transparent w-full text-right font-mono text-sm font-bold dark:text-white outline-none" /></div>
-                         <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl flex items-center justify-between"><span className="text-[10px] text-gray-400 font-bold uppercase">LNG</span><input type="number" value={manualLng} onChange={e => setManualLng(e.target.value)} className="bg-transparent w-full text-right font-mono text-sm font-bold dark:text-white outline-none" /></div>
-                    </div>
                     <div className="flex gap-3">
                         <input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none font-bold dark:text-white dark:[color-scheme:dark]" />
                         <div className="flex-1 relative"><select value={manualType} onChange={e => setManualType(e.target.value)} className="w-full p-3 pl-9 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none appearance-none font-bold dark:text-gray-300">{availableTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select><div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500"><i className={`fa-solid ${getTypeIcon(manualType)}`}></i></div></div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                         <input placeholder="評分" value={manualRating} onChange={e => setManualRating(e.target.value)} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none text-sm dark:text-white" />
-                         <input placeholder="消費" value={manualPrice} onChange={e => setManualPrice(e.target.value)} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none text-sm dark:text-white" />
-                         <input placeholder="營業時間" value={manualOpenTime} onChange={e => setManualOpenTime(e.target.value)} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none text-sm dark:text-white" />
                     </div>
                     <textarea value={manualDesc} onChange={e => setManualDesc(e.target.value)} rows={3} className="w-full p-3 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none text-sm dark:text-white" placeholder="備註..." />
                     <button onClick={handleSaveManual} disabled={!manualName} className="w-full py-4 rounded-2xl font-black text-white bg-black dark:bg-blue-600 shadow-xl active:scale-95 transition-all">確認儲存</button>
@@ -732,7 +726,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
       {showAiModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-fade-in" onClick={(e) => e.stopPropagation()}>
             <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-scale-up border border-white/10" onClick={(e) => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">AI 智能排程</h3><button onClick={() => setShowAiModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800"><i className="fa-solid fa-xmark"></i></button></div>
+                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">AI 智能排程</h3><button onClick={() => setShowAiModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 aspect-square"><i className="fa-solid fa-xmark"></i></button></div>
                 <textarea className="w-full p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl outline-none resize-none h-32 text-sm dark:text-white" placeholder="我想去..." value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} />
                 <button onClick={handleAiGenerate} disabled={isGenerating || !aiPrompt.trim()} className="w-full mt-6 py-3 rounded-xl font-bold text-white bg-black dark:bg-blue-600">{isGenerating ? '生成中...' : '生成行程'}</button>
             </div>
@@ -743,17 +737,13 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
       {showFlightModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-fade-in" onClick={(e) => e.stopPropagation()}>
             <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-scale-up border border-white/10" onClick={(e) => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">航班資訊</h3><button onClick={() => setShowFlightModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800"><i className="fa-solid fa-xmark"></i></button></div>
+                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">航班資訊</h3><button onClick={() => setShowFlightModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 aspect-square"><i className="fa-solid fa-xmark"></i></button></div>
                 <div className="space-y-3">
                    <div className="flex bg-gray-100 dark:bg-slate-800/50 p-1 rounded-2xl">
                       <button onClick={() => setFlightType('arrival')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all ${flightType === 'arrival' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-400'}`}>去程</button>
                       <button onClick={() => setFlightType('departure')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all ${flightType === 'departure' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-400'}`}>返程</button>
                    </div>
-                   <input type="text" placeholder="航班號碼 (e.g. BR191)" value={flightNo} onChange={e => setFlightNo(e.target.value.toUpperCase())} className="w-full p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl font-mono font-bold text-black dark:text-white outline-none" />
-                   <div className="grid grid-cols-2 gap-3">
-                     <input type="text" placeholder="起飛機場" value={flightOrigin} onChange={e => setFlightOrigin(e.target.value.toUpperCase())} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl font-mono font-bold text-black dark:text-white outline-none" />
-                     <input type="text" placeholder="抵達機場" value={flightDestination} onChange={e => setFlightDestination(e.target.value.toUpperCase())} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl font-mono font-bold text-black dark:text-white outline-none" />
-                   </div>
+                   <input type="text" placeholder="航班號碼" value={flightNo} onChange={e => setFlightNo(e.target.value.toUpperCase())} className="w-full p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl font-mono font-bold text-black dark:text-white outline-none" />
                    <div className="grid grid-cols-2 gap-3">
                      <input type="time" value={flightDepTime} onChange={e => setFlightDepTime(e.target.value)} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl font-bold text-black dark:text-white outline-none dark:[color-scheme:dark]" />
                      <input type="time" value={flightArrTime} onChange={e => setFlightArrTime(e.target.value)} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl font-bold text-black dark:text-white outline-none dark:[color-scheme:dark]" />
@@ -765,13 +755,11 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                                 const newItemData: ItineraryItem = {
                                     id: editingItemId || `fl-${Date.now()}`,
                                     time: primaryTime,
-                                    location: flightType === 'arrival' ? `抵達 ${flightDestination || '目的地'}` : `離開 ${flightOrigin || '出發地'}`,
+                                    location: flightType === 'arrival' ? `抵達目的地` : `離開出發地`,
                                     description: `航班 ${flightNo}`,
                                     type: 'flight',
                                     flightNumber: flightNo,
                                     isArrival: flightType === 'arrival',
-                                    origin: flightOrigin,
-                                    destination: flightDestination,
                                     departureTime: flightDepTime,
                                     arrivalTime: flightArrTime,
                                 };
@@ -788,13 +776,12 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
         </div>
       )}
 
-      {/* Generic Delete Confirmation Modal */}
+      {/* Delete Confirmation */}
       {deleteConfirmation && (
          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 animate-fade-in" onClick={(e) => e.stopPropagation()}>
              <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl max-w-xs w-full text-center border border-white/10 animate-scale-up" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-lg font-black dark:text-white mb-2">確認刪除{deleteConfirmation.type === 'day' ? '整天行程' : ''}？</h3>
-                <p className="text-xs text-gray-500 mb-6">此操作將無法恢復{deleteConfirmation.type === 'day' ? `，${deleteConfirmation.name}的所有行程都將被刪除` : ''}。</p>
-                <div className="flex gap-3">
+                <h3 className="text-lg font-black dark:text-white mb-2">確認刪除？</h3>
+                <div className="flex gap-3 mt-6">
                     <button onClick={() => setDeleteConfirmation(null)} className="flex-1 py-3 bg-gray-100 dark:bg-slate-800 rounded-xl font-bold text-gray-600">取消</button>
                     <button onClick={confirmDelete} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold">刪除</button>
                 </div>
