@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DayItinerary, ItineraryItem } from '../types';
-import { generateItinerarySuggestions, suggestIconForCategory, getPlaceDetails } from '../services/geminiService';
+import { generateItinerarySuggestions, getPlaceDetails } from '../services/geminiService';
 import { fetchWeatherForLocation } from '../services/weatherService';
 import { DEFAULT_TYPES } from '../constants';
 
