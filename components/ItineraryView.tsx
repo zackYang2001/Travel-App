@@ -53,9 +53,9 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
   const [manualTime, setManualTime] = useState('');
   const [manualDesc, setManualDesc] = useState('');
   const [manualType, setManualType] = useState<string>('sightseeing');
-  const [manualRating, setManualRating] = useState('4.5');
+  const [manualRating, setManualRating] = useState('');
   const [manualOpenTime, setManualOpenTime] = useState('');
-  const [manualPrice, setManualPrice] = useState('$$');
+  const [manualPrice, setManualPrice] = useState('');
   const [manualImage, setManualImage] = useState('');
   const [manualImageOffsetY, setManualImageOffsetY] = useState(50);
   const [manualLat, setManualLat] = useState<number | string>('');
@@ -240,7 +240,16 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
       if (!manualName.trim()) { alert("請先輸入地點名稱"); return; }
       setIsLocating(true);
       try {
-          const details = await getPlaceDetails(manualName, destination);
+          // 修正邏輯：先嘗試在目的地搜尋，如果找不到，嘗試全域搜尋
+          // 第一次嘗試：帶入目前行程的目的地 
+          let details = await getPlaceDetails(manualName, destination);
+
+          // 第二次嘗試：如果找不到，嘗試全域搜尋
+          if (!details) {
+              // 傳入 undefined 或空字串，視 geminiService 實作而定，通常表示不限制範圍
+              details = await getPlaceDetails(manualName, undefined); 
+          }
+
           if (details) {
               setManualLat(details.lat);
               setManualLng(details.lng);
