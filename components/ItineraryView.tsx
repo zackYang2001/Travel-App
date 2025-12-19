@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { DayItinerary, ItineraryItem } from '../types';
 import { generateItinerarySuggestions, suggestIconForCategory, getPlaceDetails } from '../services/geminiService';
@@ -15,47 +14,41 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
   const [selectedDayId, setSelectedDayId] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   
-  // Scroll State
   const [isScrolled, setIsScrolled] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemsRef = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
-  // Day Selector Wheel State
   const dayListRef = useRef<HTMLDivElement>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [activeDayIndex, setActiveDayIndex] = useState(0);
 
-  // Day Delete Mode State
   const longPressTimer = useRef<number | null>(null);
   const [isDayEditMode, setIsDayEditMode] = useState(false);
 
-  // Modals
   const [showAiModal, setShowAiModal] = useState(false);
   const [showFlightModal, setShowFlightModal] = useState(false);
   const [showManualModal, setShowManualModal] = useState(false);
   const [isFabOpen, setIsFabOpen] = useState(false);
 
-  // Deletion State
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'item' | 'day', id: string, name?: string } | null>(null);
-
-  // Edit Mode
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-
-  // Forms
   const [aiPrompt, setAiPrompt] = useState('');
   
-  // Flight Form
+  // 航班相關 State
   const [flightNo, setFlightNo] = useState('');
   const [flightDepTime, setFlightDepTime] = useState('');
   const [flightArrTime, setFlightArrTime] = useState('');
   const [flightOrigin, setFlightOrigin] = useState('');
   const [flightDestination, setFlightDestination] = useState('');
-  const [flightOriginTerminal, setFlightOriginTerminal] = useState('');
-  const [flightDestTerminal, setFlightDestTerminal] = useState('');
   const [flightType, setFlightType] = useState<'arrival' | 'departure'>('arrival');
+  // 新增航班詳細資訊 State
+  const [flightOriginTerminal, setFlightOriginTerminal] = useState('T1');
+  const [flightDestTerminal, setFlightDestTerminal] = useState('T2');
+  const [flightGate, setFlightGate] = useState('');
+  const [flightSeat, setFlightSeat] = useState('');
 
-  // Manual Item Form
+  // 一般行程 State
   const [manualName, setManualName] = useState('');
   const [manualTime, setManualTime] = useState('');
   const [manualDesc, setManualDesc] = useState('');
@@ -65,21 +58,17 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
   const [manualPrice, setManualPrice] = useState('$$');
   const [manualImage, setManualImage] = useState('');
   const [manualImageOffsetY, setManualImageOffsetY] = useState(50);
-  
-  // Manual Location Coords
   const [manualLat, setManualLat] = useState<number | string>('');
   const [manualLng, setManualLng] = useState<number | string>('');
   const [isLocating, setIsLocating] = useState(false);
 
-  const [availableTypes, setAvailableTypes] = useState(DEFAULT_TYPES);
+  const [availableTypes] = useState(DEFAULT_TYPES);
 
-  // Drag and Drop
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
-  // Next Day Transition Logic (Lighter & Smoother)
   const [pullAmount, setPullAmount] = useState(0); 
-  const PULL_THRESHOLD = 160; // 降低門檻，更好滑動
+  const PULL_THRESHOLD = 130; 
   const isTransitioning = useRef(false); 
   const wheelResetTimer = useRef<number | null>(null);
 
@@ -97,7 +86,6 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
         const overScroll = (currentScrollTop + clientHeight) - scrollHeight;
 
         if (isAtBottom && overScroll > 0) {
-            // 直接同步 overScroll 幅度
             setPullAmount(overScroll);
             if (overScroll > PULL_THRESHOLD && !isTransitioning.current) {
                 triggerNextDay();
@@ -110,45 +98,28 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
 
   const handleWheel = (e: React.WheelEvent) => {
     if (!scrollContainerRef.current || isTransitioning.current) return;
-    
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     const isAtBottom = scrollTop + clientHeight >= scrollHeight - 5;
 
     if (isAtBottom && e.deltaY > 0) {
-        // 加大係數，讓滾輪拉動也輕鬆一點
-        const increment = e.deltaY * 0.15;
+        const increment = e.deltaY * 0.22; 
         setPullAmount(prev => Math.min(prev + increment, PULL_THRESHOLD + 20));
-        
-        if (pullAmount >= PULL_THRESHOLD) {
-            triggerNextDay();
-        }
+        if (pullAmount >= PULL_THRESHOLD) triggerNextDay();
 
         if (wheelResetTimer.current) window.clearTimeout(wheelResetTimer.current);
-        wheelResetTimer.current = window.setTimeout(() => {
-            setPullAmount(0);
-        }, 100);
+        wheelResetTimer.current = window.setTimeout(() => setPullAmount(0), 80);
     }
   };
 
   const triggerNextDay = useCallback(() => {
       if (isTransitioning.current) return;
-      
       const currentIndex = days.findIndex(d => d.id === selectedDayId);
       if (currentIndex !== -1 && currentIndex < days.length - 1) {
           isTransitioning.current = true;
-          const nextDayId = days[currentIndex + 1].id;
-          
-          setSelectedDayId(nextDayId);
+          setSelectedDayId(days[currentIndex + 1].id);
           setPullAmount(0);
-          
-          if (scrollContainerRef.current) {
-              scrollContainerRef.current.scrollTo({ top: 0, behavior: 'instant' });
-          }
-
-          // 保持 500ms 的緩衝
-          setTimeout(() => {
-              isTransitioning.current = false;
-          }, 500); 
+          if (scrollContainerRef.current) scrollContainerRef.current.scrollTo({ top: 0, behavior: 'instant' });
+          setTimeout(() => { isTransitioning.current = false; }, 400); 
       }
   }, [days, selectedDayId]);
 
@@ -199,7 +170,8 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
     setEditingItemId(null);
     setFlightNo(''); setFlightDepTime(''); setFlightArrTime('');
     setFlightOrigin(''); setFlightDestination('');
-    setFlightOriginTerminal(''); setFlightDestTerminal('');
+    setFlightOriginTerminal('T1'); setFlightDestTerminal('T2');
+    setFlightGate(''); setFlightSeat('');
     setManualName(''); setManualTime(''); setManualDesc('');
     setManualOpenTime(''); setManualImage('');
     setManualImageOffsetY(50);
@@ -216,9 +188,12 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
         setFlightArrTime(item.arrivalTime || (item.isArrival ? item.time : ''));
         setFlightOrigin(item.origin || '');
         setFlightDestination(item.destination || '');
-        setFlightOriginTerminal(item.originTerminal || '');
-        setFlightDestTerminal(item.destinationTerminal || '');
         setFlightType(item.isArrival ? 'arrival' : 'departure');
+        // 載入新欄位
+        setFlightOriginTerminal(item.originTerminal || 'T1');
+        setFlightDestTerminal(item.destTerminal || 'T2');
+        setFlightGate(item.gate || '');
+        setFlightSeat(item.seat || '');
         setShowFlightModal(true);
     } else {
         setManualName(item.location);
@@ -240,29 +215,19 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-        if (file.size > 10 * 1024 * 1024) {
-            alert("圖片過大，請選擇小於 10MB 的圖片");
-            return;
-        }
         const reader = new FileReader();
         reader.onload = (event) => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const MAX_WIDTH = 1200;
-                let width = img.width;
-                let height = img.height;
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
-                canvas.width = width;
-                canvas.height = height;
+                let width = img.width, height = img.height;
+                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                canvas.width = width; canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 if (ctx) {
                     ctx.drawImage(img, 0, 0, width, height);
-                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-                    setManualImage(compressedBase64);
+                    setManualImage(canvas.toDataURL('image/jpeg', 0.7));
                 }
             };
             img.src = event.target?.result as string;
@@ -272,10 +237,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
   };
 
   const handleAutoLocate = async () => {
-      if (!manualName.trim()) {
-          alert("請先輸入地點名稱");
-          return;
-      }
+      if (!manualName.trim()) { alert("請先輸入地點名稱"); return; }
       setIsLocating(true);
       try {
           const details = await getPlaceDetails(manualName, destination);
@@ -285,12 +247,12 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
               if (details.rating) setManualRating(details.rating.toString());
               if (details.openTime) setManualOpenTime(details.openTime);
               if (details.priceLevel) setManualPrice(details.priceLevel);
-              if (details.description && !manualDesc) setManualDesc(details.description);
+              if (details.description) setManualDesc(details.description);
           } else {
               alert("找不到此地點詳細資訊，請嘗試輸入更完整的名稱");
           }
       } catch(e) {
-          alert("自動抓取失敗，請稍後再試");
+          alert("定位失敗，請稍後再試");
       } finally {
           setIsLocating(false);
       }
@@ -314,8 +276,8 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                 price: manualPrice,
                 imageUrl: manualImage || undefined,
                 imageOffsetY: manualImageOffsetY,
-                lat: lat !== undefined ? lat : (editingItemId ? day.items.find(i => i.id === editingItemId)?.lat : 0), 
-                lng: lng !== undefined ? lng : (editingItemId ? day.items.find(i => i.id === editingItemId)?.lng : 0),
+                lat: lat !== undefined ? lat : 0, 
+                lng: lng !== undefined ? lng : 0,
             };
             const newItems = editingItemId ? day.items.map(i => i.id === editingItemId ? newItemData : i) : [...day.items, newItemData];
             return { ...day, items: newItems.sort((a, b) => a.time.localeCompare(b.time)) };
@@ -326,7 +288,39 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
     resetForms();
   };
 
-  const handleDeleteItemClick = (itemId: string) => setDeleteConfirmation({ type: 'item', id: itemId });
+  // 儲存航班邏輯
+  const handleSaveFlight = () => {
+      if (!flightNo || !flightOrigin || !flightDestination) return;
+
+      setDays(prev => prev.map(day => {
+          if (day.id === selectedDayId) {
+              const newItemData: ItineraryItem = {
+                  id: editingItemId || `f-${Date.now()}`,
+                  type: 'flight',
+                  flightNumber: flightNo,
+                  origin: flightOrigin,
+                  destination: flightDestination,
+                  departureTime: flightDepTime,
+                  arrivalTime: flightArrTime,
+                  isArrival: flightType === 'arrival',
+                  // 儲存新欄位
+                  originTerminal: flightOriginTerminal,
+                  destTerminal: flightDestTerminal,
+                  gate: flightGate,
+                  seat: flightSeat,
+                  // 相容欄位
+                  time: flightType === 'arrival' ? flightArrTime : flightDepTime,
+                  location: `${flightOrigin} -> ${flightDestination}`,
+                  description: `Flight ${flightNo}`,
+              };
+               const newItems = editingItemId ? day.items.map(i => i.id === editingItemId ? newItemData : i) : [...day.items, newItemData];
+               return { ...day, items: newItems.sort((a, b) => a.time.localeCompare(b.time)) };
+          }
+          return day;
+      }));
+      setShowFlightModal(false);
+      resetForms();
+  }
 
   const handleDayTouchStart = (dayId: string) => {
       if (!isDayEditMode) {
@@ -338,18 +332,12 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
   };
 
   const handleDayTouchEnd = () => {
-      if (longPressTimer.current) {
-          clearTimeout(longPressTimer.current);
-          longPressTimer.current = null;
-      }
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   };
 
   const confirmDelete = () => {
       if (deleteConfirmation?.type === 'item') {
-        setDays(prev => prev.map(day => {
-            if (day.id === selectedDayId) return { ...day, items: day.items.filter(i => i.id !== deleteConfirmation.id) };
-            return day;
-        }));
+        setDays(prev => prev.map(day => day.id === selectedDayId ? { ...day, items: day.items.filter(i => i.id !== deleteConfirmation.id) } : day));
       } else if (deleteConfirmation?.type === 'day') {
         setDays(prev => {
             const filtered = prev.filter(d => d.id !== deleteConfirmation.id);
@@ -358,16 +346,10 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
             return filtered.map((d, i) => {
                 const newDate = new Date(firstDate);
                 newDate.setDate(newDate.getDate() + i);
-                return {
-                    ...d,
-                    dayLabel: `第 ${i + 1} 天`,
-                    date: newDate.toISOString().split('T')[0]
-                };
+                return { ...d, dayLabel: `第 ${i + 1} 天`, date: newDate.toISOString().split('T')[0] };
             });
         });
-        if (selectedDayId === deleteConfirmation.id) {
-            setSelectedDayId(days[0]?.id || '');
-        }
+        if (selectedDayId === deleteConfirmation.id) setSelectedDayId(days[0]?.id || '');
       }
       setDeleteConfirmation(null);
   };
@@ -381,8 +363,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
     newItems.splice(dragItem.current, 1);
     newItems.splice(dragOverItem.current, 0, draggedItemContent);
     setDays(prev => prev.map(day => day.id === selectedDayId ? { ...day, items: newItems } : day));
-    dragItem.current = null;
-    dragOverItem.current = null;
+    dragItem.current = null; dragOverItem.current = null;
   };
 
   const handleAiGenerate = async () => {
@@ -392,8 +373,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
       const suggestions = await generateItinerarySuggestions(aiPrompt);
       if (suggestions.length > 0) {
         setDays(prev => prev.map(day => day.id === selectedDayId ? { ...day, items: [...day.items, ...suggestions].sort((a, b) => a.time.localeCompare(b.time)) } : day));
-        setShowAiModal(false);
-        setAiPrompt('');
+        setShowAiModal(false); setAiPrompt('');
       }
     } catch (e) {
       alert("生成失敗，請稍後再試。");
@@ -431,11 +411,10 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
       const itemCenter = paddingLeft + (index * itemWidth) + halfItem - scrollPosition;
       const distanceFromCenter = Math.abs(containerCenter - itemCenter);
       const maxDistance = 200; 
-      const scaleBase = isScrolled ? 0.85 : 0.8; 
       const scaleMax = isScrolled ? 1.0 : 1.1;
-      let scale = Math.max(scaleMax - (distanceFromCenter / maxDistance) * 0.3, scaleBase); 
+      let scale = Math.max(scaleMax - (distanceFromCenter / maxDistance) * 0.3, 0.8); 
       let opacity = Math.max(1 - (distanceFromCenter / maxDistance) * 0.6, 0.5);
-      return { transform: `scale(${scale})`, opacity: opacity, zIndex: 50 - Math.floor(distanceFromCenter / 10) };
+      return { transform: `scale(${scale})`, opacity, zIndex: 50 - Math.floor(distanceFromCenter / 10) };
   };
 
   const getCardStyle = (itemId: string) => {
@@ -454,11 +433,6 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
       return { transform: `scale(${scale})`, opacity, filter: `blur(${blur}px)`, transition: 'transform 0.15s, opacity 0.15s, filter 0.15s', zIndex: dist < 200 ? 10 : 1 };
   };
 
-  if (!currentDay) return <div className="flex items-center justify-center h-full text-gray-400">沒有行程天數</div>;
-
-  const weatherTheme = currentDay.weather ? getWeatherTheme(currentDay.weather.condition) : getWeatherTheme('sunny');
-
-  // Radial FAB Actions Configuration
   const fabActions = [
     { icon: 'fa-wand-magic-sparkles', label: 'AI 推薦', action: () => { resetForms(); setShowAiModal(true); } },
     { icon: 'fa-pen', label: '手動輸入', action: () => { resetForms(); setShowManualModal(true); } },
@@ -469,127 +443,129 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
   const isReadyToTransition = pullProgress >= 95;
 
   return (
-    <div 
-        className="flex flex-col h-full relative font-sans transition-all duration-300 no-select" 
-        ref={scrollContainerRef} 
-        onScroll={handleScroll} 
-        onWheel={handleWheel}
-        onClick={(e) => {
-            if (isDayEditMode) {
-                const target = e.target as HTMLElement;
-                if (!target.closest('.day-selector-item') && !target.closest('.end-edit-btn')) {
-                    setIsDayEditMode(false);
-                }
-            }
-        }}
-        style={{overflowY: 'auto'}}
-    >
-      {/* Sticky Day Selector */}
-      <div className={`day-selector-container sticky top-0 z-20 transition-all duration-500 ease-out ${isScrolled ? 'bg-[#F2F2F7]/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5' : 'bg-transparent'}`}>
-        <div ref={dayListRef} onScroll={handleDayListScroll} onTouchStart={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()} className="flex overflow-x-auto snap-x snap-mandatory items-center no-scrollbar py-2" style={{ height: isScrolled ? '72px' : '84px', paddingLeft: isScrolled ? 'calc(50% - 28px)' : 'calc(50% - 32px)', paddingRight: isScrolled ? 'calc(50% - 28px)' : 'calc(50% - 32px)', gap: isScrolled ? '8px' : '16px' }}>
+    <div className="flex flex-col h-full relative font-sans transition-all duration-300 no-select bg-[#F4F4F5] dark:bg-black" ref={scrollContainerRef} onScroll={handleScroll} onWheel={handleWheel} onClick={() => { if (isDayEditMode) setIsDayEditMode(false); }} style={{overflowY: 'auto'}}>
+      <div className={`day-selector-container sticky top-0 z-20 transition-all duration-500 ease-out ${isScrolled ? 'bg-[#F4F4F5]/90 dark:bg-black/90 backdrop-blur-xl border-b border-gray-200/50 dark:border-white/5' : 'bg-transparent'}`}>
+        <div ref={dayListRef} onScroll={handleDayListScroll} className="flex overflow-x-auto snap-x snap-mandatory items-center no-scrollbar py-2" style={{ height: isScrolled ? '72px' : '84px', paddingLeft: isScrolled ? 'calc(50% - 28px)' : 'calc(50% - 32px)', paddingRight: isScrolled ? 'calc(50% - 28px)' : 'calc(50% - 32px)', gap: isScrolled ? '8px' : '16px' }}>
           {days.map((day, index) => (
-            <div 
-                key={day.id} 
-                className="day-selector-item relative group shrink-0 snap-center"
-                onMouseDown={() => handleDayTouchStart(day.id)}
-                onMouseUp={handleDayTouchEnd}
-                onMouseLeave={handleDayTouchEnd}
-                onTouchStart={() => handleDayTouchStart(day.id)}
-                onTouchEnd={handleDayTouchEnd}
-            >
-                <button 
-                    onClick={(e) => { 
-                        e.stopPropagation(); 
-                        if (isDayEditMode) {
-                            setSelectedDayId(day.id);
-                        } else {
-                            setSelectedDayId(day.id); 
-                        }
-                    }} 
-                    style={getDayWheelStyle(index)} 
-                    data-editing={isDayEditMode}
-                    className={`flex flex-col items-center justify-center transition-all duration-300 rounded-2xl border ${isScrolled ? 'w-14 h-14' : 'w-16 h-16'} ${selectedDayId === day.id ? 'bg-[#007AFF] border-[#007AFF] text-white shadow-lg' : 'bg-white dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400'} ${isDayEditMode ? 'scale-110 shadow-2xl z-50 ring-4 ring-blue-500/20' : ''}`}
-                >
+            <div key={day.id} className="day-selector-item relative group shrink-0 snap-center" onMouseDown={() => handleDayTouchStart(day.id)} onMouseUp={handleDayTouchEnd} onTouchStart={() => handleDayTouchStart(day.id)} onTouchEnd={handleDayTouchEnd}>
+                <button onClick={(e) => { e.stopPropagation(); setSelectedDayId(day.id); }} style={getDayWheelStyle(index)} data-editing={isDayEditMode} className={`flex flex-col items-center justify-center transition-all duration-300 rounded-2xl border ${isScrolled ? 'w-14 h-14' : 'w-16 h-16'} ${selectedDayId === day.id ? 'bg-[#6B8EAD] text-white dark:bg-white dark:text-black border-transparent shadow-xl scale-110' : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-800 text-gray-400'}`}>
                     <span className={`font-medium leading-none ${isScrolled ? 'text-[9px]' : 'text-[10px] opacity-80 mb-1'}`}>{day.date.slice(5).replace('-', '/')}</span>
                     {!isScrolled && <span className="font-bold text-xl leading-none">{day.dayLabel.replace('第 ','').replace(' 天','')}</span>}
                 </button>
-                
-                {/* Delete Trigger (Red X) */}
-                <button 
-                    onClick={(e) => { e.stopPropagation(); setDeleteConfirmation({ type: 'day', id: day.id, name: day.dayLabel }); }}
-                    className={`absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center text-[11px] shadow-xl z-[60] transition-all transform scale-0 group-hover:scale-100 ${isDayEditMode ? 'scale-110 opacity-100' : 'opacity-0 pointer-events-none'}`}
-                >
-                    <i className="fa-solid fa-xmark"></i>
-                </button>
+                <button onClick={(e) => { e.stopPropagation(); setDeleteConfirmation({ type: 'day', id: day.id, name: day.dayLabel }); }} className={`absolute -top-2 -right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center text-[11px] shadow-xl z-[60] transition-all transform ${isDayEditMode ? 'scale-110 opacity-100' : 'scale-0 opacity-0 pointer-events-none'}`}><i className="fa-solid fa-xmark"></i></button>
             </div>
           ))}
-          <button onClick={(e) => {
-            e.stopPropagation();
+          <button onClick={() => {
             const nextDate = new Date(days[days.length-1]?.date || new Date());
             if (days.length > 0) nextDate.setDate(nextDate.getDate() + 1);
             const newDayId = `d-${Date.now()}`;
             setDays([...days, { id: newDayId, date: nextDate.toISOString().split('T')[0], dayLabel: `第 ${days.length + 1} 天`, items: [] }]);
             setTimeout(() => setSelectedDayId(newDayId), 100);
-          }} className={`flex-shrink-0 snap-center flex items-center justify-center border border-dashed border-gray-300 dark:border-slate-600 text-gray-400 rounded-2xl transition-all hover:border-blue-500 hover:text-blue-500 ${isScrolled ? 'w-14 h-14' : 'w-16 h-16'}`}><i className="fa-solid fa-plus"></i></button>
+          }} className={`flex-shrink-0 snap-center flex items-center justify-center border border-dashed border-gray-300 dark:border-slate-800 text-gray-400 rounded-2xl transition-all ${isScrolled ? 'w-14 h-14' : 'w-16 h-16'}`}><i className="fa-solid fa-plus"></i></button>
         </div>
       </div>
 
       <div className="flex-1 p-5 pt-2 pb-10">
-        {/* Header & Weather */}
         <div className="flex flex-col gap-6 mb-8">
             <div className="flex justify-between items-end px-1">
                  <div><h2 className="text-4xl font-black text-black dark:text-white tracking-tighter">{currentDay.dayLabel}</h2><p className="text-gray-400 dark:text-gray-500 font-bold mt-1 text-sm">{currentDay.date.replace(/-/g, '.')}</p></div>
-                 {isDayEditMode && <button onClick={(e) => { e.stopPropagation(); setIsDayEditMode(false); }} className="end-edit-btn px-5 py-2.5 bg-blue-600 text-white rounded-full text-xs font-black shadow-lg shadow-blue-500/30 active:scale-95 transition-all">結束編輯</button>}
+                 {isDayEditMode && <button onClick={(e) => { e.stopPropagation(); setIsDayEditMode(false); }} className="px-5 py-2.5 bg-[#6B8EAD] dark:bg-blue-600 text-white rounded-full text-xs font-black shadow-lg">結束編輯</button>}
             </div>
             {currentDay.weather && (
-                <div className={`rounded-[2rem] p-5 shadow-sm border flex items-center justify-between relative overflow-hidden ${weatherTheme.bg} ${weatherTheme.text}`}>
-                     <div className="flex items-center gap-4 relative z-10"><div className={`w-14 h-14 flex items-center justify-center text-4xl ${weatherTheme.iconColor}`}><i className={`fa-solid ${currentDay.weather.icon}`}></i></div><div><div className="text-3xl font-black leading-none">{currentDay.weather.temp}°</div><div className="text-xs font-bold opacity-80 mt-1">{currentDay.weather.condition}</div></div></div>
-                     <div className="flex flex-col items-end gap-1 relative z-10"><div className={`px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1.5 backdrop-blur-md ${weatherTheme.labelBg} ${weatherTheme.iconColor}`}><i className="fa-solid fa-umbrella text-[10px]"></i>{currentDay.weather.precipitationChance}%</div><span className="text-[10px] font-bold opacity-60 uppercase tracking-wider">降雨機率</span></div>
+                <div className={`rounded-[2rem] p-5 shadow-sm border flex items-center justify-between relative overflow-hidden ${getWeatherTheme(currentDay.weather.condition).bg} ${getWeatherTheme(currentDay.weather.condition).text}`}>
+                     <div className="flex items-center gap-4 relative z-10"><div className={`w-14 h-14 flex items-center justify-center text-4xl ${getWeatherTheme(currentDay.weather.condition).iconColor}`}><i className={`fa-solid ${currentDay.weather.icon}`}></i></div><div><div className="text-3xl font-black">{currentDay.weather.temp}°</div><div className="text-xs font-bold opacity-80">{currentDay.weather.condition}</div></div></div>
+                     <div className="flex flex-col items-end gap-1 relative z-10"><div className={`px-3 py-1.5 rounded-full text-xs font-black backdrop-blur-md ${getWeatherTheme(currentDay.weather.condition).labelBg}`}><i className="fa-solid fa-umbrella text-[10px] mr-1"></i>{currentDay.weather.precipitationChance}%</div></div>
                 </div>
             )}
         </div>
 
-        {/* Timeline Items */}
         {currentDay.items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-300 bg-white/30 dark:bg-slate-800/30 rounded-[2rem] border-2 border-dashed border-gray-200 mt-4"><div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-4"><i className="fa-solid fa-map-location-dot text-2xl opacity-40"></i></div><p className="font-bold text-sm text-gray-400">尚未安排行程</p></div>
+          <div className="flex flex-col items-center justify-center py-20 text-gray-300 bg-white/50 dark:bg-slate-900/50 rounded-[2rem] border-2 border-dashed border-gray-300 dark:border-slate-800 mt-4"><p className="font-bold text-sm text-gray-400">尚未安排行程</p></div>
         ) : (
           <div className="space-y-6">
             {currentDay.items.map((item, index) => {
               const cardStyle = getCardStyle(item.id);
               if (item.type === 'flight') return (
-                <div key={item.id} ref={el => { itemsRef.current.set(item.id, el); }} style={cardStyle} className="relative transform origin-center">
-                     <div className="absolute left-1/2 -top-6 -translate-x-1/2 w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-lg border-4 border-[#F2F2F7] dark:border-slate-900 z-20"><i className={`fa-solid ${item.isArrival ? 'fa-plane-arrival' : 'fa-plane-departure'}`}></i></div>
-                     <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-3xl text-white p-5 shadow-xl dark:shadow-[0_0_25px_rgba(59,130,246,0.2)] relative border border-transparent dark:border-white/10 transition-shadow duration-300"><div className="grid grid-cols-3 items-center gap-2"><div className="text-center"><span className="block text-3xl font-black">{item.origin}</span><span className="block text-[10px] opacity-70">出發</span><span className="block text-lg font-bold">{item.departureTime}</span></div><div className="flex flex-col items-center text-blue-200"><i className="fa-solid fa-plane text-xs transform rotate-90"></i><div className="w-full h-px bg-white/30"></div></div><div className="text-center"><span className="block text-3xl font-black">{item.destination}</span><span className="block text-[10px] opacity-70">抵達</span><span className="block text-lg font-bold">{item.arrivalTime}</span></div></div><div className="mt-4 flex justify-end gap-2"><button onClick={(e) => { e.stopPropagation(); openEditModal(item); }} className="w-8 h-8 rounded-full bg-white/20"><i className="fa-solid fa-pen text-xs"></i></button><button onClick={(e) => { e.stopPropagation(); handleDeleteItemClick(item.id); }} className="w-8 h-8 rounded-full bg-white/20"><i className="fa-solid fa-trash-can text-xs"></i></button></div></div>
+                <div key={item.id} ref={el => { itemsRef.current.set(item.id, el); }} style={cardStyle} className="relative transform origin-center my-6 group">
+                     <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white dark:border-slate-800 overflow-hidden relative">
+                        <div className="absolute top-[35%] -left-3 w-6 h-6 rounded-full bg-[#F4F4F5] dark:bg-black z-20"></div>
+                        <div className="absolute top-[35%] -right-3 w-6 h-6 rounded-full bg-[#F4F4F5] dark:bg-black z-20"></div>
+
+                        <div className="p-6 pb-8 relative">
+                            <div className="flex justify-between items-center mb-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center">
+                                        <i className="fa-solid fa-plane text-xs"></i>
+                                    </div>
+                                    <span className="font-mono text-sm font-bold text-gray-900 dark:text-white tracking-tight">{item.flightNumber || 'FLIGHT'}</span>
+                                </div>
+                                <span className={`text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wide ${item.isArrival ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                    {item.isArrival ? 'Arriving' : 'Departing'}
+                                </span>
+                            </div>
+
+                            <div className="flex items-center justify-between relative z-10">
+                                <div className="flex flex-col items-start min-w-[80px]">
+                                    <span className="text-4xl font-black text-black dark:text-white tabular-nums leading-none mb-1">{item.departureTime || '--:--'}</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-sm font-bold text-gray-500">{item.origin || 'ORG'}</span>
+                                        <span className="px-1.5 py-0.5 rounded-[4px] bg-gray-200 dark:bg-slate-800 text-[10px] font-mono font-bold text-gray-600 dark:text-gray-400">{item.originTerminal || 'T1'}</span>
+                                    </div>
+                                </div>
+                                <div className="flex-1 px-4 flex flex-col items-center opacity-30">
+                                    <div className="w-full border-t-2 border-dashed border-gray-400 dark:border-gray-600"></div>
+                                </div>
+                                <div className="flex flex-col items-end min-w-[80px]">
+                                    <span className="text-4xl font-black text-black dark:text-white tabular-nums leading-none mb-1">{item.arrivalTime || '--:--'}</span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="px-1.5 py-0.5 rounded-[4px] bg-gray-200 dark:bg-slate-800 text-[10px] font-mono font-bold text-gray-600 dark:text-gray-400">{item.destTerminal || 'T2'}</span>
+                                        <span className="text-sm font-bold text-gray-500">{item.destination || 'DST'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-50 dark:bg-slate-800/50 px-6 py-4 flex justify-between items-center border-t border-dashed border-gray-200 dark:border-slate-700">
+                             <div className="flex gap-6">
+                                 <div>
+                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Gate</span>
+                                     <span className="text-sm font-black text-gray-800 dark:text-gray-200">{item.gate || '--'}</span>
+                                 </div>
+                                 <div>
+                                     <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Seat</span>
+                                     <span className="text-sm font-black text-gray-800 dark:text-gray-200">{item.seat || '--'}</span>
+                                 </div>
+                             </div>
+                             
+                             <div className="flex gap-2">
+                                <button onClick={() => openEditModal(item)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white dark:hover:bg-slate-700 hover:shadow-sm text-gray-400 transition-all"><i className="fa-solid fa-pen text-xs"></i></button>
+                                <button onClick={() => setDeleteConfirmation({type:'item', id:item.id})} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white dark:hover:bg-slate-700 hover:shadow-sm text-gray-400 hover:text-red-500 transition-all"><i className="fa-solid fa-trash-can text-xs"></i></button>
+                             </div>
+                        </div>
+                     </div>
                 </div>
               );
+
               return (
                 <div key={item.id} ref={el => { itemsRef.current.set(item.id, el); }} style={cardStyle} className="relative flex flex-col items-center group transform origin-center" draggable onDragStart={(e) => handleDragStart(e, index)} onDragEnter={(e) => handleDragEnter(e, index)} onDragEnd={handleDragEnd} onDragOver={(e) => e.preventDefault()}>
-                  <div className="w-full bg-white dark:bg-slate-900 rounded-3xl shadow-sm dark:shadow-[0_0_20px_rgba(255,255,255,0.06)] overflow-hidden border border-gray-100 dark:border-white/10 transition-all duration-300">
+                  <div className="w-full bg-white dark:bg-slate-900 rounded-3xl shadow-[0_2px_20px_rgb(0,0,0,0.04)] overflow-hidden border border-white dark:border-white/5 transition-all">
                     {item.imageUrl && (
                         <div className="h-48 w-full relative overflow-hidden">
-                            <img 
-                                src={item.imageUrl} 
-                                alt={item.location} 
-                                className="w-full h-full object-cover" 
-                                style={{ objectPosition: `center ${item.imageOffsetY ?? 50}%` }}
-                            />
-                            <div className="absolute top-4 left-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2">
-                                <i className={`fa-solid ${getTypeIcon(item.type)}`}></i>
-                                <time className="font-mono">{item.time}</time>
+                            <img src={item.imageUrl} className="w-full h-full object-cover" style={{ objectPosition: `center ${item.imageOffsetY ?? 50}%` }} alt="" />
+                            <div className="absolute top-4 left-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2 shadow-sm">
+                                <i className={`fa-solid ${getTypeIcon(item.type)}`}></i><time className="font-mono">{item.time}</time>
                             </div>
                             <h3 className="absolute bottom-4 left-4 text-white font-bold text-2xl drop-shadow-md">{item.location}</h3>
                         </div>
                     )}
                     <div className="p-6">
-                        {!item.imageUrl && (
-                             <div className="flex items-center justify-between mb-4"><h3 className="text-2xl font-bold text-gray-900 dark:text-white">{item.location}</h3><div className="bg-gray-100 dark:bg-slate-800/50 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2"><i className={`fa-solid ${getTypeIcon(item.type)}`}></i><time className="font-mono">{item.time}</time></div></div>
-                        )}
+                        {!item.imageUrl && <div className="flex items-center justify-between mb-4"><h3 className="text-2xl font-bold dark:text-white">{item.location}</h3><div className="bg-gray-100 dark:bg-slate-800/50 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2"><i className={`fa-solid ${getTypeIcon(item.type)}`}></i><time className="font-mono">{item.time}</time></div></div>}
                         <div className="flex flex-wrap items-center gap-2 mb-4">
                             {item.rating && <span className="flex items-center gap-1 text-[10px] font-bold text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-2 py-1 rounded-lg"><i className="fa-solid fa-star text-[9px]"></i> {item.rating}</span>}
                             <span className="text-[10px] text-gray-400 flex items-center gap-3 ml-auto font-medium">{item.price && <span>{item.price}</span>}{item.openTime && <span className="flex items-center gap-1"><i className="fa-regular fa-clock"></i>{item.openTime}</span>}</span>
                         </div>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{item.description}</p>
-                        <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-50 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={(e) => { e.stopPropagation(); openEditModal(item); }} className="w-8 h-8 rounded-full bg-gray-50 dark:bg-slate-800"><i className="fa-solid fa-pen text-xs"></i></button><button onClick={(e) => { e.stopPropagation(); handleDeleteItemClick(item.id); }} className="w-8 h-8 rounded-full bg-gray-50 dark:bg-slate-800"><i className="fa-solid fa-trash-can text-xs"></i></button></div>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-2">{item.description}</p>
+                        <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-50 dark:border-slate-800 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => openEditModal(item)} className="w-8 h-8 rounded-full bg-gray-50 dark:bg-slate-800"><i className="fa-solid fa-pen text-xs"></i></button><button onClick={() => setDeleteConfirmation({type:'item', id:item.id})} className="w-8 h-8 rounded-full bg-gray-50 dark:bg-slate-800"><i className="fa-solid fa-trash-can text-xs"></i></button></div>
                     </div>
                   </div>
                 </div>
@@ -598,192 +574,167 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
           </div>
         )}
 
-        {/* Next Day Transition Trigger - Smooth & Responsive */}
-        <div 
-            className="mt-12 mb-32 flex flex-col items-center justify-center transition-all duration-300"
-            style={{ 
-                transform: `translateY(-${pullAmount * 0.25}px)`, 
-                opacity: 0.3 + (pullAmount / PULL_THRESHOLD) * 0.7 
-            }}
-        >
+        <div className="mt-12 mb-32 flex flex-col items-center justify-center transition-all duration-300" style={{ transform: `translateY(-${pullAmount * 0.25}px)`, opacity: 0.3 + (pullAmount / PULL_THRESHOLD) * 0.7 }}>
             {nextDay ? (
                 <div className="flex flex-col items-center w-full max-w-[200px]">
                     <div className="w-full flex justify-center mb-6 relative">
-                         <div className="w-[1.5px] h-14 bg-gray-200 dark:bg-slate-800 rounded-full opacity-30"></div>
-                         {/* Progress Line - Use Bezier for smoother stretching */}
-                         <div 
-                            className="absolute top-0 w-[2.5px] bg-blue-500 rounded-full transition-all duration-200 ease-[cubic-bezier(0.2,1,0.3,1)]" 
-                            style={{ 
-                                height: `${Math.min(pullProgress, 100)}%`, 
-                                opacity: pullProgress / 100,
-                                willChange: 'height, opacity'
-                            }}
-                         ></div>
+                         <div className="w-[1.5px] h-14 bg-gray-300 dark:bg-slate-800 rounded-full opacity-30"></div>
+                         <div className="absolute top-0 w-[2.5px] bg-[#6B8EAD] dark:bg-white rounded-full transition-all duration-200 ease-out" style={{ height: `${Math.min(pullProgress, 100)}%`, opacity: pullProgress / 100, willChange: 'height' }}></div>
                     </div>
-                    
                     <div className={`flex flex-col items-center transition-all duration-500 ${isReadyToTransition ? 'scale-110' : 'scale-100 opacity-50'}`}>
-                        <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${isReadyToTransition ? 'bg-blue-600 text-white shadow-xl' : 'bg-gray-100 dark:bg-slate-800 text-blue-500'}`}>
-                            <i className={`fa-solid fa-chevron-up text-lg ${isReadyToTransition ? 'animate-bounce' : 'animate-bounce-subtle'}`}></i>
-                        </div>
-                        
-                        <p className={`text-[11px] font-black uppercase tracking-[0.2em] transition-colors duration-300 ${isReadyToTransition ? 'text-blue-600' : 'text-gray-400'}`}>
-                            {isReadyToTransition ? '放開切換' : '繼續向下拉動'}
-                        </p>
-                        
-                        <h4 className="text-2xl font-black text-gray-900 dark:text-white mt-1 tracking-tight">{nextDay.dayLabel}</h4>
+                        <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 transition-all duration-300 ${isReadyToTransition ? 'bg-[#6B8EAD] text-white dark:bg-white dark:text-black shadow-xl' : 'bg-gray-200 dark:bg-slate-800 text-gray-400'}`}><i className={`fa-solid fa-chevron-up text-lg ${isReadyToTransition ? 'animate-bounce' : 'animate-bounce-subtle'}`}></i></div>
+                        <p className={`text-[11px] font-black uppercase tracking-[0.2em] ${isReadyToTransition ? 'text-[#6B8EAD] dark:text-white' : 'text-gray-400'}`}>{isReadyToTransition ? '放開切換' : '向下拉動切換'}</p>
+                        <h4 className="text-2xl font-black text-gray-900 dark:text-white mt-1">{nextDay.dayLabel}</h4>
                     </div>
-                    
-                    {/* Horizontal Bar - Silky Smooth */}
-                    <div className="w-full h-1 bg-gray-100 dark:bg-slate-800/50 rounded-full mt-8 overflow-hidden">
-                        <div 
-                            className="h-full bg-blue-500 transition-all duration-200 ease-[cubic-bezier(0.2,1,0.3,1)]" 
-                            style={{ 
-                                width: `${pullProgress}%`,
-                                willChange: 'width'
-                            }}
-                        ></div>
-                    </div>
+                    <div className="w-full h-1 bg-gray-200 dark:bg-slate-800/50 rounded-full mt-8 overflow-hidden"><div className="h-full bg-[#6B8EAD] dark:bg-white transition-all duration-200 ease-out" style={{ width: `${pullProgress}%`, willChange: 'width' }}></div></div>
                 </div>
             ) : (
-                <div className="py-16 flex flex-col items-center">
-                    <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-slate-800/50 flex items-center justify-center mb-4 border border-gray-200 dark:border-white/5 opacity-40">
-                        <i className="fa-solid fa-flag-checkered text-gray-400 text-lg"></i>
-                    </div>
-                    <p className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 opacity-60">最後一天行程</p>
-                </div>
+                <div className="py-16 flex flex-col items-center opacity-40"><i className="fa-solid fa-flag-checkered text-gray-400 text-lg mb-2"></i><p className="text-[11px] font-black uppercase tracking-widest text-gray-400">旅程終點</p></div>
             )}
         </div>
       </div>
 
-      {/* Radial FAB - Fixed Shapes */}
       <div className="fixed bottom-28 right-6 z-40">
         {fabActions.map((btn, idx) => {
-            const angleStep = 90 / (fabActions.length - 1);
-            const angle = idx * angleStep;
-            const radius = 95;
-            const rad = (angle * Math.PI) / 180;
-            const x = isFabOpen ? -Math.cos(rad) * radius : 0;
-            const y = isFabOpen ? -Math.sin(rad) * radius : 0;
+            const angle = idx * (90 / (fabActions.length - 1));
+            const x = isFabOpen ? -Math.cos((angle * Math.PI) / 180) * 95 : 0;
+            const y = isFabOpen ? -Math.sin((angle * Math.PI) / 180) * 95 : 0;
             return (
-                <div key={idx} className="absolute bottom-1 right-1 flex items-center justify-center group" style={{ transform: `translate(${x}px, ${y}px)`, transition: `transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) ${idx * 0.04}s, opacity 0.3s` }}>
-                     <span className={`absolute whitespace-nowrap bg-black dark:bg-white text-white dark:text-black text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none -top-10 shadow-xl`}>{btn.label}</span>
-                     <button onClick={(e) => { e.stopPropagation(); btn.action(); setIsFabOpen(false); }} className={`w-12 h-12 aspect-square flex-shrink-0 rounded-full flex items-center justify-center shadow-lg border border-white/50 dark:border-white/10 transition-all hover:scale-110 active:scale-95 bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 ${isFabOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
-                        <i className={`fa-solid ${btn.icon} text-lg`}></i>
-                    </button>
+                <div key={idx} className="absolute bottom-1 right-1" style={{ transform: `translate(${x}px, ${y}px)`, transition: `transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) ${idx * 0.04}s`, opacity: isFabOpen ? 1 : 0 }}>
+                     <button onClick={() => { btn.action(); setIsFabOpen(false); }} className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg border border-white/50 dark:border-white/10 bg-white dark:bg-slate-800 text-[#6B8EAD] dark:text-white"><i className={`fa-solid ${btn.icon} text-lg`}></i></button>
                 </div>
             );
         })}
-        <button onClick={(e) => { e.stopPropagation(); setIsFabOpen(!isFabOpen); }} className={`relative z-50 w-16 h-16 aspect-square flex-shrink-0 rounded-full flex items-center justify-center text-2xl transition-all duration-300 bg-gradient-to-br from-white/40 to-white/5 dark:from-slate-700/50 dark:to-slate-800/30 border border-white/60 dark:border-white/10 shadow-xl backdrop-blur-[2px] ${isFabOpen ? 'text-white rotate-45 bg-black/80 dark:bg-white/90 dark:text-black border-transparent' : 'text-blue-600 dark:text-blue-400 hover:scale-105 active:scale-95'}`}>
-            <i className="fa-solid fa-plus drop-shadow-sm"></i>
-        </button>
+        <button onClick={() => setIsFabOpen(!isFabOpen)} className={`relative z-50 w-16 h-16 rounded-full flex items-center justify-center text-2xl transition-all duration-300 shadow-xl backdrop-blur-md ${isFabOpen ? 'text-white rotate-45 bg-[#6B8EAD] dark:bg-white/90 dark:text-black' : 'text-[#6B8EAD] dark:text-white bg-white/80 dark:bg-slate-800/80 border border-white/60 dark:border-white/10'}`}><i className="fa-solid fa-plus"></i></button>
       </div>
 
-      {/* Manual Modal */}
       {showManualModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-fade-in overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-scale-up border border-white/10 my-auto" onClick={(e) => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">{editingItemId ? '編輯行程' : '新增行程'}</h3><button onClick={() => setShowManualModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 aspect-square"><i className="fa-solid fa-xmark"></i></button></div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white/10 my-auto">
+                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">{editingItemId ? '編輯行程' : '新增行程'}</h3><button onClick={() => setShowManualModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800"><i className="fa-solid fa-xmark"></i></button></div>
                 <div className="space-y-4">
                     <div className="relative group">
                         {manualImage ? (
                             <div className="w-full h-40 rounded-2xl overflow-hidden relative border border-gray-100 dark:border-slate-800">
-                                <img src={manualImage} className="w-full h-full object-cover transition-all" style={{ objectPosition: `center ${manualImageOffsetY}%` }} alt="Preview" />
-                                <div className="absolute inset-0 bg-black/20 flex items-end p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                     <div className="w-full bg-white/90 backdrop-blur rounded-lg p-2 flex flex-col gap-1">
-                                         <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center">調整顯示區域</label>
-                                         <input type="range" min="0" max="100" value={manualImageOffsetY} onChange={(e) => setManualImageOffsetY(parseInt(e.target.value))} className="w-full h-1 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                                     </div>
-                                </div>
-                                <button onClick={() => {setManualImage(''); setManualImageOffsetY(50);}} className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full text-xs shadow-md aspect-square"><i className="fa-solid fa-trash"></i></button>
+                                <img src={manualImage} className="w-full h-full object-cover" style={{ objectPosition: `center ${manualImageOffsetY}%` }} alt="" />
+                                <div className="absolute inset-0 bg-black/20 flex items-end p-2 opacity-0 group-hover:opacity-100"><input type="range" min="0" max="100" value={manualImageOffsetY} onChange={(e) => setManualImageOffsetY(parseInt(e.target.value))} className="w-full h-1 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-500" /></div>
+                                <button onClick={() => setManualImage('')} className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full text-xs shadow-md"><i className="fa-solid fa-trash"></i></button>
                             </div>
                         ) : (
-                            <label className="w-full h-24 border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-blue-300 dark:hover:border-blue-900 transition-all text-gray-400">
-                                <i className="fa-solid fa-camera text-xl"></i>
-                                <span className="text-[10px] font-bold uppercase tracking-wider">上傳行程圖片</span>
-                                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                            <label className="w-full h-24 border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-blue-300 text-gray-400">
+                                <i className="fa-solid fa-camera text-xl"></i><span className="text-[10px] font-bold uppercase tracking-wider">上傳行程圖片</span><input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
                             </label>
                         )}
                     </div>
                     <div className="flex gap-2">
                         <input placeholder="地點名稱" value={manualName} onChange={e => setManualName(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl outline-none font-bold dark:text-white" />
-                        <button onClick={handleAutoLocate} disabled={isLocating} className={`px-4 rounded-2xl font-bold text-xs flex items-center gap-1 transition-all ${isLocating ? 'opacity-50' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}>
-                            {isLocating ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-location-crosshairs"></i>}
-                            <span>自動抓取</span>
+                        <button onClick={handleAutoLocate} disabled={isLocating} className="px-4 rounded-2xl font-bold text-xs flex items-center gap-1 bg-[#6B8EAD] text-white disabled:opacity-50">
+                            {isLocating ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-location-dot"></i>}<span>定位</span>
                         </button>
                     </div>
+                    <div className="grid grid-cols-2 gap-3">
+                         <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl flex items-center justify-between"><span className="text-[10px] text-gray-400 font-bold">緯度</span><input type="number" value={manualLat} onChange={e => setManualLat(e.target.value)} className="bg-transparent w-full text-right font-mono text-sm font-bold dark:text-white outline-none" /></div>
+                         <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl flex items-center justify-between"><span className="text-[10px] text-gray-400 font-bold">經度</span><input type="number" value={manualLng} onChange={e => setManualLng(e.target.value)} className="bg-transparent w-full text-right font-mono text-sm font-bold dark:text-white outline-none" /></div>
+                    </div>
                     <div className="flex gap-3">
-                        <input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="flex-1 p-3 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none font-bold dark:text-white dark:[color-scheme:dark]" />
-                        <div className="flex-1 relative"><select value={manualType} onChange={e => setManualType(e.target.value)} className="w-full p-3 pl-9 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none appearance-none font-bold dark:text-gray-300">{availableTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select><div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500"><i className={`fa-solid ${getTypeIcon(manualType)}`}></i></div></div>
+                        <div className="flex-1 bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl"><label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">抵達時間</label><input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="w-full bg-transparent outline-none font-bold dark:text-white dark:[color-scheme:dark]" /></div>
+                        <div className="flex-1 bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl relative"><label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">類別</label><select value={manualType} onChange={e => setManualType(e.target.value)} className="w-full bg-transparent outline-none appearance-none font-bold dark:text-gray-300">{availableTypes.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select><div className="absolute right-3 bottom-3 pointer-events-none text-gray-500"><i className={`fa-solid ${getTypeIcon(manualType)}`}></i></div></div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                         <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl"><label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">評價</label><input type="number" step="0.1" value={manualRating} onChange={e => setManualRating(e.target.value)} className="w-full bg-transparent outline-none font-bold text-sm dark:text-white" /></div>
+                         <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl"><label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">預算</label><input value={manualPrice} onChange={e => setManualPrice(e.target.value)} className="w-full bg-transparent outline-none font-bold text-sm dark:text-white" /></div>
+                         <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl"><label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">營業時間</label><input value={manualOpenTime} onChange={e => setManualOpenTime(e.target.value)} className="w-full bg-transparent outline-none font-bold text-sm dark:text-white" /></div>
                     </div>
                     <textarea value={manualDesc} onChange={e => setManualDesc(e.target.value)} rows={3} className="w-full p-3 bg-gray-50 dark:bg-slate-800 rounded-xl outline-none text-sm dark:text-white" placeholder="備註..." />
-                    <button onClick={handleSaveManual} disabled={!manualName} className="w-full py-4 rounded-2xl font-black text-white bg-black dark:bg-blue-600 shadow-xl active:scale-95 transition-all">確認儲存</button>
+                    <button onClick={handleSaveManual} disabled={!manualName} className="w-full py-4 rounded-2xl font-black text-white bg-[#6B8EAD] dark:bg-blue-600 shadow-xl disabled:opacity-30">確認儲存</button>
                 </div>
             </div>
         </div>
       )}
 
-      {/* AI Suggestions Modal */}
-      {showAiModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-fade-in" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-scale-up border border-white/10" onClick={(e) => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">AI 智能排程</h3><button onClick={() => setShowAiModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 aspect-square"><i className="fa-solid fa-xmark"></i></button></div>
-                <textarea className="w-full p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl outline-none resize-none h-32 text-sm dark:text-white" placeholder="我想去..." value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} />
-                <button onClick={handleAiGenerate} disabled={isGenerating || !aiPrompt.trim()} className="w-full mt-6 py-3 rounded-xl font-bold text-white bg-black dark:bg-blue-600">{isGenerating ? '生成中...' : '生成行程'}</button>
-            </div>
-        </div>
-      )}
-
-      {/* Flight Modal */}
+      {/* 新增航班 Modal - 點擊「新增航班」後顯示 */}
       {showFlightModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 animate-fade-in" onClick={(e) => e.stopPropagation()}>
-            <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl animate-scale-up border border-white/10" onClick={(e) => e.stopPropagation()}>
-                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">航班資訊</h3><button onClick={() => setShowFlightModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 aspect-square"><i className="fa-solid fa-xmark"></i></button></div>
-                <div className="space-y-3">
-                   <div className="flex bg-gray-100 dark:bg-slate-800/50 p-1 rounded-2xl">
-                      <button onClick={() => setFlightType('arrival')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all ${flightType === 'arrival' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-400'}`}>去程</button>
-                      <button onClick={() => setFlightType('departure')} className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all ${flightType === 'departure' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-400'}`}>返程</button>
-                   </div>
-                   <input type="text" placeholder="航班號碼" value={flightNo} onChange={e => setFlightNo(e.target.value.toUpperCase())} className="w-full p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl font-mono font-bold text-black dark:text-white outline-none" />
-                   <div className="grid grid-cols-2 gap-3">
-                     <input type="time" value={flightDepTime} onChange={e => setFlightDepTime(e.target.value)} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl font-bold text-black dark:text-white outline-none dark:[color-scheme:dark]" />
-                     <input type="time" value={flightArrTime} onChange={e => setFlightArrTime(e.target.value)} className="p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl font-bold text-black dark:text-white outline-none dark:[color-scheme:dark]" />
-                   </div>
-                   <button onClick={() => {
-                        const primaryTime = flightType === 'arrival' ? (flightArrTime || flightDepTime) : (flightDepTime || flightArrTime);
-                        setDays(prev => prev.map(day => {
-                            if (day.id === selectedDayId) {
-                                const newItemData: ItineraryItem = {
-                                    id: editingItemId || `fl-${Date.now()}`,
-                                    time: primaryTime,
-                                    location: flightType === 'arrival' ? `抵達目的地` : `離開出發地`,
-                                    description: `航班 ${flightNo}`,
-                                    type: 'flight',
-                                    flightNumber: flightNo,
-                                    isArrival: flightType === 'arrival',
-                                    departureTime: flightDepTime,
-                                    arrivalTime: flightArrTime,
-                                };
-                                const newItems = editingItemId ? day.items.map(i => i.id === editingItemId ? newItemData : i) : [...day.items, newItemData];
-                                return { ...day, items: newItems.sort((a, b) => a.time.localeCompare(b.time)) };
-                            }
-                            return day;
-                        }));
-                        setShowFlightModal(false);
-                        resetForms();
-                   }} className="w-full mt-2 py-4 rounded-2xl font-bold text-white bg-[#007AFF] hover:bg-blue-600 shadow-xl">儲存航班</button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4 overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white/10 my-auto">
+                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">{editingItemId ? '編輯航班' : '新增航班'}</h3><button onClick={() => setShowFlightModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800"><i className="fa-solid fa-xmark"></i></button></div>
+                
+                <div className="space-y-4">
+                    {/* 類型選擇 */}
+                    <div className="flex p-1 bg-gray-100 dark:bg-slate-800 rounded-xl">
+                        <button onClick={() => setFlightType('arrival')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${flightType === 'arrival' ? 'bg-white dark:bg-slate-700 shadow-sm text-green-600' : 'text-gray-400'}`}>抵達 (Arrival)</button>
+                        <button onClick={() => setFlightType('departure')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${flightType === 'departure' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600' : 'text-gray-400'}`}>出發 (Departure)</button>
+                    </div>
+
+                    {/* 航班編號 */}
+                    <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl">
+                        <label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">航班編號 (Flight No.)</label>
+                        <input type="text" value={flightNo} onChange={e => setFlightNo(e.target.value.toUpperCase())} placeholder="e.g. BR198" className="w-full bg-transparent outline-none font-black text-lg dark:text-white uppercase" />
+                    </div>
+
+                    {/* 機場與航廈 */}
+                    <div className="flex gap-2">
+                         <div className="flex-1 bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl">
+                             <label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">出發地</label>
+                             <div className="flex gap-2">
+                                <input value={flightOrigin} onChange={e => setFlightOrigin(e.target.value.toUpperCase())} placeholder="TPE" className="w-full bg-transparent outline-none font-bold dark:text-white uppercase" />
+                                <input value={flightOriginTerminal} onChange={e => setFlightOriginTerminal(e.target.value)} placeholder="T1" className="w-10 text-center bg-gray-200 dark:bg-slate-700 rounded text-xs font-bold outline-none" />
+                             </div>
+                         </div>
+                         <div className="flex items-center text-gray-300"><i className="fa-solid fa-plane"></i></div>
+                         <div className="flex-1 bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl">
+                             <label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">目的地</label>
+                             <div className="flex gap-2">
+                                <input value={flightDestination} onChange={e => setFlightDestination(e.target.value.toUpperCase())} placeholder="NRT" className="w-full bg-transparent outline-none font-bold dark:text-white uppercase" />
+                                <input value={flightDestTerminal} onChange={e => setFlightDestTerminal(e.target.value)} placeholder="T2" className="w-10 text-center bg-gray-200 dark:bg-slate-700 rounded text-xs font-bold outline-none" />
+                             </div>
+                         </div>
+                    </div>
+
+                    {/* 時間 */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl"><label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">出發時間</label><input type="time" value={flightDepTime} onChange={e => setFlightDepTime(e.target.value)} className="w-full bg-transparent outline-none font-bold dark:text-white dark:[color-scheme:dark]" /></div>
+                        <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl"><label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">抵達時間</label><input type="time" value={flightArrTime} onChange={e => setFlightArrTime(e.target.value)} className="w-full bg-transparent outline-none font-bold dark:text-white dark:[color-scheme:dark]" /></div>
+                    </div>
+
+                    {/* 登機門與座位 */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl"><label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">登機門 (Gate)</label><input value={flightGate} onChange={e => setFlightGate(e.target.value)} placeholder="--" className="w-full bg-transparent outline-none font-bold dark:text-white" /></div>
+                        <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl"><label className="block text-[10px] text-gray-400 font-bold uppercase mb-1">座位 (Seat)</label><input value={flightSeat} onChange={e => setFlightSeat(e.target.value)} placeholder="--" className="w-full bg-transparent outline-none font-bold dark:text-white" /></div>
+                    </div>
+
+                    <button onClick={handleSaveFlight} disabled={!flightNo || !flightOrigin} className="w-full py-4 rounded-2xl font-black text-white bg-[#6B8EAD] dark:bg-blue-600 shadow-xl disabled:opacity-30">儲存航班資訊</button>
                 </div>
             </div>
         </div>
       )}
 
-      {/* Delete Confirmation */}
+      {showAiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white/10">
+                <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-bold dark:text-white">AI 智能排程</h3><button onClick={() => setShowAiModal(false)} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800"><i className="fa-solid fa-xmark"></i></button></div>
+                <textarea className="w-full p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl outline-none resize-none h-32 text-sm dark:text-white" placeholder="我想去..." value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} />
+                <button onClick={handleAiGenerate} disabled={isGenerating || !aiPrompt.trim()} className="w-full mt-6 py-3 rounded-xl font-bold text-white bg-[#6B8EAD] dark:bg-blue-600">{isGenerating ? '生成中...' : '生成行程'}</button>
+            </div>
+        </div>
+      )}
+
+      {/* PURE GLASS NEON DELETE CONFIRMATION */}
       {deleteConfirmation && (
-         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/20 backdrop-blur-sm p-4 animate-fade-in" onClick={(e) => e.stopPropagation()}>
-             <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl max-w-xs w-full text-center border border-white/10 animate-scale-up" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-lg font-black dark:text-white mb-2">確認刪除？</h3>
-                <div className="flex gap-3 mt-6">
-                    <button onClick={() => setDeleteConfirmation(null)} className="flex-1 py-3 bg-gray-100 dark:bg-slate-800 rounded-xl font-bold text-gray-600">取消</button>
-                    <button onClick={confirmDelete} className="flex-1 py-3 bg-red-500 text-white rounded-xl font-bold">刪除</button>
+         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/10 dark:bg-black/40 backdrop-blur-md p-4 animate-fade-in">
+             <div className="relative p-[1.5px] rounded-[2.8rem] bg-gradient-to-tr from-[#5AC8FA] via-[#AF52DE] to-[#FF2D55] dark:from-[#FF2D55] dark:via-[#AF52DE] dark:to-[#5AC8FA] shadow-[0_20px_60px_-15px_rgba(175,82,222,0.3)] dark:shadow-[0_20px_70px_-10px_rgba(175,82,222,0.5)] animate-scale-up max-w-sm w-full">
+                <div className="absolute inset-0 rounded-[2.8rem] opacity-30 dark:opacity-40 blur-3xl bg-gradient-to-tr from-[#5AC8FA] via-[#AF52DE] to-[#FF2D55] dark:from-[#FF2D55] dark:via-[#AF52DE] dark:to-[#5AC8FA] -z-10"></div>
+                <div className="bg-white/80 dark:bg-[#111827]/80 backdrop-blur-[50px] rounded-[2.7rem] overflow-hidden p-9 text-center border border-white/40 dark:border-white/5">
+                    <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20 shadow-inner">
+                        <i className="fa-solid fa-trash-can text-2xl"></i>
+                    </div>
+                    <h3 className="text-2xl font-black text-black dark:text-white mb-3 tracking-tight">確認刪除？</h3>
+                    <p className="text-gray-700 dark:text-gray-300 font-bold mb-9 leading-relaxed text-sm">
+                        此動作無法復原，確定要永久刪除此項目嗎？
+                    </p>
+                    <div className="flex gap-4">
+                        <button onClick={() => setDeleteConfirmation(null)} className="flex-1 py-4 bg-white/50 dark:bg-white/5 rounded-2xl font-black text-gray-700 dark:text-gray-300 border border-black/5 dark:border-white/10 hover:bg-white/80 transition-all active:scale-95 text-sm">取消</button>
+                        <button onClick={confirmDelete} className="flex-1 py-4 bg-gradient-to-r from-[#FF3B30] to-[#FF2D55] text-white rounded-2xl font-black shadow-lg shadow-red-500/30 hover:brightness-110 transition-all active:scale-95 text-sm">刪除</button>
+                    </div>
                 </div>
              </div>
          </div>
