@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Trip } from '../types';
 
@@ -15,6 +14,8 @@ interface HomeViewProps {
 const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onDeleteTrip, isDarkMode, toggleTheme, currentUserId }) => {
   const [showSheet, setShowSheet] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  
+  // 新增行程表單狀態
   const [destination, setDestination] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -49,6 +50,7 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
         dayCount++;
     }
     
+    // 如果沒有輸入封面，使用 Unsplash 隨機圖
     const finalImage = coverImage.trim() || `https://source.unsplash.com/featured/800x600?${encodeURIComponent(destination)},landmark`;
 
     const newTrip: Trip = {
@@ -62,6 +64,7 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
     };
     onAddTrip(newTrip);
     closeSheet();
+    // 重置表單
     setDestination(''); setStartDate(''); setEndDate(''); setCoverImage(''); setCoverImageDark('');
   };
 
@@ -137,17 +140,39 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
             </button>
        )}
 
+       {/* New Create Trip Sheet */}
        {showSheet && (
         <div className="fixed inset-0 z-[110] flex items-end justify-center">
           <div className={`absolute inset-0 bg-black/10 dark:bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${isClosing ? 'opacity-0' : 'opacity-100'}`} onClick={closeSheet}></div>
           <div className={`bg-white/90 dark:bg-[#161b2c] backdrop-blur-2xl w-full max-w-[480px] rounded-t-[2.5rem] p-8 shadow-2xl border-t border-white/50 dark:border-white/10 transform transition-transform duration-300 ease-out z-10 relative ${isClosing ? 'translate-y-full' : 'translate-y-0'}`}>
              <div className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-8 absolute top-3 left-1/2 -translate-x-1/2"></div>
              <button onClick={closeSheet} className="absolute top-6 right-6 w-8 h-8 bg-white/50 dark:bg-white/5 rounded-full flex items-center justify-center text-gray-500"><i className="fa-solid fa-xmark"></i></button>
-             <h3 className="text-2xl font-black text-black dark:text-white mb-6">新增旅程</h3>
+             <h3 className="text-2xl font-black text-black dark:text-white mb-6">新旅程展開</h3>
              <div className="space-y-6">
                <div className="bg-white/40 dark:bg-black/30 p-4 rounded-2xl border border-white/50 dark:border-white/10 transition-all">
                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">目的地</label>
-                 <div className="flex items-center gap-3"><i className="fa-solid fa-location-dot text-gray-400"></i><input type="text" placeholder="輸入城市名稱..." value={destination} onChange={e => setDestination(e.target.value)} className="w-full bg-transparent outline-none font-bold text-lg text-black dark:text-white" autoFocus /></div>
+                 <div className="flex items-center gap-3"><i className="fa-solid fa-location-dot text-gray-400"></i><input type="text" placeholder="輸入國家名稱..." value={destination} onChange={e => setDestination(e.target.value)} className="w-full bg-transparent outline-none font-bold text-lg text-black dark:text-white" autoFocus /></div>
+               </div>
+               <div className="grid grid-cols-2 gap-3">
+                   <div className="bg-white/40 dark:bg-black/30 p-4 rounded-2xl border border-white/50 dark:border-white/10 transition-all">
+                     <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">封面 (淺色)</label>
+                     <input type="text" placeholder="URL..." value={coverImage} onChange={e => setCoverImage(e.target.value)} className="w-full bg-transparent outline-none font-bold text-sm text-black dark:text-white font-mono" />
+                   </div>
+                   <div className="bg-white/40 dark:bg-black/30 p-4 rounded-2xl border border-white/50 dark:border-white/10 transition-all">
+                     <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">封面 (深色)</label>
+                     <input type="text" placeholder="URL..." value={coverImageDark} onChange={e => setCoverImageDark(e.target.value)} className="w-full bg-transparent outline-none font-bold text-sm text-black dark:text-white font-mono" />
+                   </div>
+               </div>
+               <div className="flex items-center gap-3">
+                    <div className="flex-1 bg-white/40 dark:bg-black/30 p-4 rounded-2xl border border-white/50 dark:border-white/10 transition-all">
+                        <label className="block text-[10px] font-bold text-gray-500 mb-1">出發</label>
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-black dark:text-white font-mono dark:[color-scheme:dark]" />
+                    </div>
+                    <i className="fa-solid fa-arrow-right text-gray-400/50"></i>
+                    <div className="flex-1 bg-white/40 dark:bg-black/30 p-4 rounded-2xl border border-white/50 dark:border-white/10 transition-all">
+                            <label className="block text-[10px] font-bold text-gray-500 mb-1">回程</label>
+                            <input type="date" min={startDate} value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full bg-transparent outline-none text-sm font-bold text-black dark:text-white font-mono dark:[color-scheme:dark]" />
+                    </div>
                </div>
                <button onClick={handleCreate} className="w-full py-4 rounded-2xl font-black text-white bg-[#007AFF] hover:bg-blue-600 transition-all shadow-xl active:scale-95">開始規劃</button>
              </div>
@@ -155,14 +180,14 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
         </div>
       )}
 
-      {/* Trip Delete Confirmation - Master Aesthetic Optimized */}
+      {/* Trip Delete Confirmation - Master Aesthetic Optimized (Pure Glass Neon) */}
       {deleteTripId && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/20 dark:bg-black/60 backdrop-blur-md p-4 animate-fade-in">
              <div className="relative p-[1.5px] rounded-[2.8rem] bg-gradient-to-tr from-[#5AC8FA] via-[#AF52DE] to-[#FF2D55] dark:from-[#FF2D55] dark:via-[#AF52DE] dark:to-[#5AC8FA] shadow-[0_20px_60px_-15px_rgba(175,82,222,0.3)] dark:shadow-[0_20px_70px_-10px_rgba(175,82,222,0.5)] animate-scale-up max-w-sm w-full">
                 {/* Independent Glow Layer */}
                 <div className="absolute inset-0 rounded-[2.8rem] opacity-40 dark:opacity-50 blur-3xl bg-gradient-to-tr from-[#5AC8FA] via-[#AF52DE] to-[#FF2D55] dark:from-[#FF2D55] dark:via-[#AF52DE] dark:to-[#5AC8FA] -z-10"></div>
                 
-                {/* Pure Glass Interior - Neutral background with high opacity for clarity */}
+                {/* Pure Glass Interior */}
                 <div className="bg-white/80 dark:bg-[#111827]/80 backdrop-blur-[40px] rounded-[2.7rem] overflow-hidden p-9 text-center border border-white/40 dark:border-white/5">
                     <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 border border-red-500/20 shadow-inner">
                         <i className="fa-solid fa-trash-can text-2xl"></i>
