@@ -621,9 +621,33 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                                 <button onClick={() => setManualImage('')} className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full text-xs shadow-md"><i className="fa-solid fa-trash"></i></button>
                             </div>
                         ) : (
-                            <label className="w-full h-24 border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-blue-300 text-gray-400">
-                                <i className="fa-solid fa-camera text-xl"></i><span className="text-[10px] font-bold uppercase tracking-wider">上傳行程圖片</span><input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                            </label>
+                            <div className="space-y-3">
+                                {/* 上傳檔案區域 */}
+                                <label className="w-full h-24 border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-[#6B8EAD] hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-all text-gray-400">
+                                    <i className="fa-solid fa-cloud-arrow-up text-xl"></i>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider">上傳圖片檔案</span>
+                                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                                </label>
+                                
+                                {/* 分隔線 */}
+                                <div className="flex items-center gap-3">
+                                    <div className="h-[1px] bg-gray-100 dark:bg-slate-800 flex-1"></div>
+                                    <span className="text-[10px] text-gray-300 font-bold uppercase">OR</span>
+                                    <div className="h-[1px] bg-gray-100 dark:bg-slate-800 flex-1"></div>
+                                </div>
+
+                                {/* URL 輸入區域 */}
+                                <div className="bg-gray-50 dark:bg-slate-800 p-3 rounded-2xl flex items-center gap-3 border border-transparent focus-within:border-[#6B8EAD] transition-colors">
+                                     <i className="fa-solid fa-link text-gray-400"></i>
+                                     <input 
+                                        type="text" 
+                                        placeholder="貼上圖片網址..." 
+                                        className="w-full bg-transparent outline-none font-bold text-sm dark:text-white placeholder:text-gray-400"
+                                        onBlur={(e) => { if(e.target.value.trim()) setManualImage(e.target.value.trim()) }}
+                                        onKeyDown={(e) => { if(e.key === 'Enter' && e.currentTarget.value.trim()) setManualImage(e.currentTarget.value.trim()) }}
+                                     />
+                                </div>
+                            </div>
                         )}
                     </div>
                     <div className="flex gap-2">
