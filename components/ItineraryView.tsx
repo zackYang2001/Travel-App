@@ -497,10 +497,10 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
               if (item.type === 'flight') return (
                 <div key={item.id} ref={el => { itemsRef.current.set(item.id, el); }} style={cardStyle} className="relative transform origin-center my-6 group">
                      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white dark:border-slate-800 overflow-hidden relative">
-                        <div className="absolute top-[35%] -left-3 w-6 h-6 rounded-full bg-[#F4F4F5] dark:bg-black z-20"></div>
-                        <div className="absolute top-[35%] -right-3 w-6 h-6 rounded-full bg-[#F4F4F5] dark:bg-black z-20"></div>
+                        <div className="absolute top-[35%] -left-6 w-12 h-12 rounded-full bg-[#F4F4F5] dark:bg-black z-20"></div>
+                        <div className="absolute top-[35%] -right-6 w-12 h-12 rounded-full bg-[#F4F4F5] dark:bg-black z-20"></div>
 
-                        <div className="p-6 pb-8 relative">
+                        <div className="p-10 pb-8 relative">
                             <div className="flex justify-between items-center mb-6">
                                 <div className="flex items-center gap-2">
                                     <div className="w-8 h-8 rounded-full bg-black dark:bg-white text-white dark:text-black flex items-center justify-center">
@@ -534,7 +534,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                             </div>
                         </div>
 
-                        <div className="bg-gray-50 dark:bg-slate-800/50 px-6 py-4 flex justify-between items-center border-t border-dashed border-gray-200 dark:border-slate-700">
+                        <div className="bg-gray-50 dark:bg-slate-800/50 px-10 py-4 flex justify-between items-center border-t border-dashed border-gray-200 dark:border-slate-700">
                              <div className="flex gap-6">
                                  <div>
                                      <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Gate</span>
@@ -615,7 +615,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                 </div>
             );
         })}
-        <button onClick={() => setIsFabOpen(!isFabOpen)} className={`relative z-50 w-16 h-16 rounded-full flex items-center justify-center text-2xl transition-all duration-300 shadow-xl backdrop-blur-md ${isFabOpen ? 'text-white rotate-45 bg-[#6B8EAD] dark:bg-white/90 dark:text-black' : 'text-[#6B8EAD] dark:text-white bg-white/80 dark:bg-slate-800/80 border border-white/60 dark:border-white/10'}`}><i className="fa-solid fa-plus"></i></button>
+        <button onClick={() => setIsFabOpen(!isFabOpen)} className={`relative z-50 w-16 h-16 rounded-full flex items-center justify-center text-2xl transition-all duration-300 shadow-xl backdrop-blur-sm ${isFabOpen ? 'text-white rotate-45 bg-[#6B8EAD] dark:bg-white/90 dark:text-black' : 'text-[#6B8EAD] dark:text-white bg-white/60 dark:bg-slate-800/60 border border-white/60 dark:border-white/10'}`}><i className="fa-solid fa-plus"></i></button>
       </div>
 
       {showManualModal && (
