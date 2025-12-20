@@ -34,6 +34,7 @@ const App: React.FC = () => {
 
   // Swipe Logic Refs
   const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
   const TABS = [AppTab.ITINERARY, AppTab.EXPENSES, AppTab.MAP];
 
   // Modals
@@ -369,22 +370,32 @@ const App: React.FC = () => {
   // Main Swipe Logic
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartX.current === null) return;
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    
     const touchEndX = e.changedTouches[0].clientX;
-    const diff = touchStartX.current - touchEndX;
+    const touchEndY = e.changedTouches[0].clientY;
+    
+    const diffX = touchStartX.current - touchEndX;
+    const diffY = touchStartY.current - touchEndY;
     
     // Reset
     touchStartX.current = null;
+    touchStartY.current = null;
 
-    // Threshold for swipe detection (px)
-    if (Math.abs(diff) < 60) return;
+    // 判斷 1: 水平滑動門檻
+    if (Math.abs(diffX) < 80) return;
+
+    // 判斷 2 (關鍵修復): 防誤觸機制
+    // 如果「垂直位移」大於「水平位移」，代表使用者意圖是「捲動頁面」而非「切換分頁」
+    if (Math.abs(diffY) > Math.abs(diffX)) return;
 
     const currentIndex = TABS.indexOf(activeTab);
     
-    if (diff > 0) {
+    if (diffX > 0) {
         // Swipe Left -> Next Tab
         if (currentIndex < TABS.length - 1) {
             setActiveTab(TABS[currentIndex + 1]);
