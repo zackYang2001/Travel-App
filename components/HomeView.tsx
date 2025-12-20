@@ -87,7 +87,7 @@ const HomeView: React.FC<HomeViewProps> = ({ trips, onSelectTrip, onAddTrip, onD
     const diffTime = Math.abs(startDate.getTime() - now.getTime());
     return { 
       label: `還有 ${Math.ceil(diffTime / (1000 * 60 * 60 * 24))} 天`, 
-      color: 'bg-blue-500 text-white dark:bg-[#2D1B4E]/80 dark:border dark:border-[#A855F7] dark:text-[#F3E8FF]' 
+      color: 'bg-black/20 border border-white/50 text-white backdrop-blur-md shadow-sm dark:bg-[#2D1B4E]/80 dark:border-[#A855F7] dark:text-[#F3E8FF]'
     };
   };
 

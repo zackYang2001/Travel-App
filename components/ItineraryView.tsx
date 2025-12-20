@@ -561,6 +561,7 @@ const ItineraryView: React.FC<ItineraryViewProps> = ({ days, setDays, destinatio
                     {item.imageUrl && (
                         <div className="h-48 w-full relative overflow-hidden">
                             <img src={item.imageUrl} className="w-full h-full object-cover" style={{ objectPosition: `center ${item.imageOffsetY ?? 50}%` }} alt="" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/0 to-transparent pointer-events-none"></div>
                             <div className="absolute top-4 left-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2 shadow-sm">
                                 <i className={`fa-solid ${getTypeIcon(item.type)}`}></i><time className="font-mono">{item.time}</time>
                             </div>
