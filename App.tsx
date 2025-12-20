@@ -473,26 +473,75 @@ const App: React.FC = () => {
       </div>
 
       {/* Bottom Navigation (Floating Pill Style) */}
-      <div className="absolute bottom-8 left-0 right-0 z-30 flex justify-center pointer-events-none">
-          <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl border border-white/50 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)] rounded-full p-1.5 flex gap-1 pointer-events-auto transition-all duration-300">
-             {[
-                 { id: AppTab.ITINERARY, icon: 'fa-calendar-days', label: '行程' },
-                 { id: AppTab.EXPENSES, icon: 'fa-wallet', label: '記帳' },
-                 { id: AppTab.MAP, icon: 'fa-map', label: '地圖' },
-             ].map(tab => (
-                 <button 
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`px-6 py-3 rounded-full flex items-center gap-2 transition-all duration-300 
-                    ${activeTab === tab.id 
-                        ? 'bg-[#007AFF] text-white shadow-md shadow-blue-200 dark:bg-[#1e3a8a] dark:text-blue-100 dark:shadow-blue-900/50' 
-                        : 'text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-gray-600 dark:hover:text-gray-300'
-                    }`}
-                 >
-                     <i className={`fa-solid ${tab.icon} ${activeTab === tab.id ? 'text-sm' : 'text-lg'}`}></i>
-                     {activeTab === tab.id && <span className="text-xs font-bold">{tab.label}</span>}
-                 </button>
-             ))}
+      <div className="absolute bottom-8 left-0 right-0 z-50 flex justify-center px-4 pointer-events-none">
+          <div className="relative pointer-events-auto 
+              bg-black/10 dark:bg-black/10
+              backdrop-blur-sm saturate-150
+              border border-white/20 dark:border-white/5
+              shadow-[0_15px_35px_-5px_rgba(0,0,0,0.1)] dark:shadow-[0_15px_35px_-5px_rgba(0,0,0,0.4)]
+              ring-1 ring-white/40 dark:ring-white/20
+              rounded-full p-1.5 w-full max-w-[320px] h-[72px]
+              overflow-hidden isolate"
+          >
+            
+            {/* Active Liquid Pill */}
+            <div 
+                className="absolute top-1.5 bottom-1.5 rounded-full 
+                bg-[#007AFF]
+                shadow-[0_0_15px_rgba(0,122,255,0.3),inset_0_1px_2px_rgba(255,255,255,0.3)]
+                transition-all duration-[500ms] cubic-bezier(0.32, 0.72, 0, 1) z-0"
+                style={{ 
+                    width: 'calc((100% - 12px) / 3)', 
+                    left: '6px',
+                    transform: `translateX(${TABS.indexOf(activeTab) * 100}%)` 
+                }}
+            >
+                <div className="absolute top-0 left-0 right-0 h-[30%] bg-gradient-to-b from-white/20 to-transparent rounded-t-full"></div>
+            </div>
+
+            {/* Tab Buttons Layer */}
+            <div className="relative z-10 grid grid-cols-3 h-full w-full">
+                {[
+                    { id: AppTab.ITINERARY, icon: 'fa-calendar-days', label: '行程' },
+                    { id: AppTab.EXPENSES, icon: 'fa-wallet', label: '記帳' },
+                    { id: AppTab.MAP, icon: 'fa-map', label: '地圖' },
+                ].map((tab) => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                        <button 
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className="group flex flex-col items-center justify-center h-full w-full relative outline-none"
+                        >
+                            {/* Icon Container 
+                                關鍵修正：使用 translate-y 進行位移。
+                                未選中：translate-y-0 (絕對居中)
+                                選中：translate-y-[-6px] (上移讓位)
+                            */}
+                            <div className={`flex items-center justify-center text-xl transition-all duration-300 ease-out z-20
+                                ${isActive 
+                                    ? 'text-white -translate-y-[10px] drop-shadow-md' 
+                                    : 'text-gray-700 dark:text-gray-400 group-hover:text-black dark:group-hover:text-gray-200 translate-y-0'
+                                }`}
+                            >
+                                <i className={`fa-solid ${tab.icon}`}></i>
+                            </div>
+
+                            {/* Label - Absolute Positioning 
+                                絕對定位確保它不佔據空間，不會把 Icon 往上推。
+                                位置鎖定在底部，根據狀態顯示/隱藏。
+                            */}
+                            <span className={`absolute bottom-[10px] text-[10px] font-medium tracking-wide transition-all duration-300 z-10
+                                ${isActive 
+                                    ? 'text-white opacity-100 translate-y-0' 
+                                    : 'text-transparent opacity-0 translate-y-2 pointer-events-none'
+                                }`}>
+                                {tab.label}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
           </div>
       </div>
 
